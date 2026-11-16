@@ -20,7 +20,7 @@ export default {
 
       if (url.pathname === "/api/health" && request.method === "GET") {
         await env.DB.prepare("SELECT 1").first();
-        return json({ ok: true, service: "nexfund-api", database: "connected", mode: "preview" });
+        return json({ ok: true, service: "nexfund-api", database: "connected", mode: "cloudflare-worker" });
       }
 
       if (url.pathname === "/api/auth/register" && request.method === "POST") {
