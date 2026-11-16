@@ -9,7 +9,12 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(request) });
-    if (!url.pathname.startsWith("/api/")) return json({ error: "Not found" }, 404);
+
+    // Serve website and trader portal from Workers Static Assets.
+    if (!url.pathname.startsWith("/api/")) {
+      if (!env.ASSETS) return json({ error: "Static assets binding ASSETS is not configured" }, 503);
+      return env.ASSETS.fetch(request);
+    }
     if (!env.DB) return json({ error: "Database binding DB is not configured" }, 503);
 
     try {
