@@ -1,5 +1,3 @@
-import { json } from "./http.js";
-
 export async function readSession(request, db) {
   const cookie = request.headers.get("Cookie") || "";
   const match = cookie.match(/(?:^|;\s*)nexfund_session=([^;]+)/);
