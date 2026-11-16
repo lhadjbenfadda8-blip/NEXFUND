@@ -1,0 +1,8 @@
+name = "nexfund"
+main = "src/index.js"
+compatibility_date = "2026-11-16"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "nexfund-db"
+database_id = "32c5f1b9-37c7-441a-914a-dccbf2ec94cb"
