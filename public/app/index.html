@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#080d18">
+<title>Trader Portal | NEXFUND</title>
+<link rel="stylesheet" href="/app/app.css">
+<script src="/app/app.js" defer></script>
+</head>
+<body>
+<header class="top"><a class="brand" href="/"><span class="mark">N</span>NEX<span>FUND</span></a><a href="/">Back to website</a></header>
+<main class="wrap">
+<section class="intro"><p class="eyebrow">NEXFUND TRADER PORTAL</p><h1>Your trading journey,<br><span>in one place.</span></h1><p class="sub">Secure account access and evaluation overview.</p></section>
+<section id="auth" class="panel">
+<div class="tabs"><button id="loginTab" class="active" type="button">Sign in</button><button id="registerTab" type="button">Create account</button></div>
+<form id="authForm">
+<label>Email address<input id="email" type="email" autocomplete="email" required maxlength="254"></label>
+<label>Password<input id="password" type="password" autocomplete="current-password" required minlength="12" maxlength="128"><small>Use at least 12 characters.</small></label>
+<button class="primary" id="submitBtn" type="submit">Sign in</button>
+<p id="authMessage" class="message" role="status"></p>
+</form>
+</section>
+<section id="dashboard" class="panel hidden">
+<div class="dash-head"><div><p class="eyebrow">TRADER DASHBOARD</p><h2>Welcome back</h2><p id="userEmail" class="sub"></p></div><button id="logoutBtn" class="secondary" type="button">Sign out</button></div>
+<div class="notice">Your account is active. Evaluation programs and live MT5 connectivity are not enabled yet.</div>
+<h3>Your evaluations</h3><div id="challengeList" class="empty">No evaluation accounts yet.</div>
+<h3>Notifications</h3><div id="notifications" class="empty">No notifications.</div>
+</section>
+<p class="foot">Preview environment. No paid challenges, trading, or funding services are currently offered.</p>
+</main>
+</body></html>
