@@ -1,4 +1,5 @@
-import { json, readSession, requireAdmin, requireSameOrigin } from "./auth.js";
+import { readSession, requireAdmin, requireSameOrigin } from "./auth.js";
+import { json } from "./http.js";
 import { evaluateChallenge } from "./risk-engine.js";
 
 const now = () => new Date().toISOString();
