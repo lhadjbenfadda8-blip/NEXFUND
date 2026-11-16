@@ -14,7 +14,7 @@ test("fails when daily drawdown limit is reached", () => {
   assert.equal(result.failureReason, "daily_drawdown");
 });
 test("fails when maximum drawdown limit is reached", () => {
-  const result = evaluateChallenge({ ...base, equity: 9000, dailyStartEquity: 10000 }, rules);
+  const result = evaluateChallenge({ ...base, equity: 9000, dailyStartEquity: 9400 }, rules);
   assert.equal(result.status, "failed");
   assert.equal(result.failureReason, "daily_drawdown");
 });
