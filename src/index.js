@@ -100,20 +100,72 @@ export default {
         const platform = String(body.platform || "");
         if (platform !== "MT5") return json({ error: "Currently only MetaTrader 5 (MT5) is supported." }, 400);
         await ensureDefaultPrograms(env.DB);
-        const program = await env.DB.prepare("SELECT id,account_size_usd FROM evaluation_programs WHERE id=? AND status='active'").bind(programId).first();
+        const program = await env.DB.prepare("SELECT id,account_size_usd,fee_usd FROM evaluation_programs WHERE id=? AND status='active'").bind(programId).first();
         if (!program) return json({ error: "The selected evaluation program is unavailable." }, 404);
         const challengeId = id();
         const balance = Number(program.account_size_usd);
         const today = new Date().toISOString().slice(0,10);
+        const paymentId = id();
         await env.DB.batch([
           env.DB.prepare("INSERT INTO challenges (id,user_id,program_id,status,initial_balance,current_balance,equity,high_watermark,daily_start_equity,daily_start_date) VALUES (?,?,?,'pending',?,?,?,?,?,?)")
             .bind(challengeId, session.user_id, program.id, balance, balance, balance, balance, balance, today),
           env.DB.prepare("INSERT INTO trading_accounts (id,challenge_id,platform,integration_mode,connection_status) VALUES (?,?,?,'demo','not_connected')")
             .bind(id(), challengeId, platform),
           env.DB.prepare("INSERT INTO audit_logs (id,actor_user_id,action,target_type,target_id,details_json) VALUES (?,?,?,'challenge',?,?)")
-            .bind(id(), session.user_id, "challenge.selection_created", challengeId, JSON.stringify({ platform, program_id: program.id }))
+            .bind(id(), session.user_id, "challenge.selection_created", challengeId, JSON.stringify({ platform, program_id: program.id })),
+          env.DB.prepare("INSERT INTO crypto_payments (id,challenge_id,user_id,amount_usdt,status) VALUES (?,?,?,? ,'pending')")
+            .bind(paymentId, challengeId, session.user_id, Number(program.fee_usd))
         ]);
-        return json({ ok: true, challenge_id: challengeId, status: "pending", platform, message: "Your evaluation selection has been saved. Payment and MT5 credentials are not enabled yet." }, 201);
+        return json({ ok: true, challenge_id: challengeId, payment_id: paymentId, status: "pending", platform, message: "Selection saved. Complete USDT TRC20 payment to activate the evaluation." }, 201);
+      }
+
+      if (url.pathname.startsWith("/api/payments/") && request.method === "GET") {
+        const paymentId = url.pathname.split("/")[3];
+        const payment = await env.DB.prepare("SELECT id,challenge_id,amount_usdt,status,txid,created_at,paid_at FROM crypto_payments WHERE id=? AND user_id=?").bind(paymentId, session.user_id).first();
+        if (!payment) return json({ error: "Payment request not found." }, 404);
+        if (!env.USDT_TRC20_ADDRESS) return json({ error: "USDT TRC20 receiving address is not configured yet." }, 503);
+        return json({ payment, network: "TRON (TRC20)", token: "USDT", receiving_address: env.USDT_TRC20_ADDRESS, payment_enabled: env.PAYMENTS_ENABLED === "true" });
+      }
+
+      if (url.pathname.startsWith("/api/payments/") && url.pathname.endsWith("/verify") && request.method === "POST") {
+        if (env.PAYMENTS_ENABLED !== "true") return json({ error: "Crypto payments are not enabled yet." }, 503);
+        if (!env.USDT_TRC20_ADDRESS) return json({ error: "Receiving address is not configured." }, 503);
+        const paymentId = url.pathname.split("/")[3];
+        const body = await request.json();
+        const txid = String(body.txid || "").trim().toLowerCase();
+        if (!/^[0-9a-f]{64}$/.test(txid)) return json({ error: "Enter a valid 64-character TRON transaction ID." }, 400);
+        const payment = await env.DB.prepare("SELECT id,challenge_id,amount_usdt,status,txid FROM crypto_payments WHERE id=? AND user_id=?").bind(paymentId, session.user_id).first();
+        if (!payment) return json({ error: "Payment request not found." }, 404);
+        if (payment.status === "paid") return json({ ok: true, status: "paid", message: "Payment was already confirmed." });
+        const used = await env.DB.prepare("SELECT id FROM crypto_payments WHERE txid=? AND status='paid'").bind(txid).first();
+        if (used) return json({ error: "This transaction has already been used." }, 409);
+
+        const apiUrl = "https://api.trongrid.io/v1/accounts/" + encodeURIComponent(env.USDT_TRC20_ADDRESS) +
+          "/transactions/trc20?only_confirmed=true&limit=200&contract_address=TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
+        const headers = {};
+        if (env.TRONGRID_API_KEY) headers["TRON-PRO-API-KEY"] = env.TRONGRID_API_KEY;
+        const chainResponse = await fetch(apiUrl, { headers });
+        if (!chainResponse.ok) return json({ error: "Could not verify the transaction with TRON right now. Try again later." }, 502);
+        const chainData = await chainResponse.json();
+        const transfer = (chainData.data || []).find(item =>
+          String(item.transaction_id || "").toLowerCase() === txid &&
+          String(item.to || "").toLowerCase() === String(env.USDT_TRC20_ADDRESS).toLowerCase() &&
+          String(item.token_info?.address || "").toLowerCase() === "tr7nhqjekqxgtci8q8zy4p8lotszgjlj6t" &&
+          String(item.type || "").toLowerCase() === "transfer"
+        );
+        if (!transfer) return json({ error: "No confirmed incoming USDT TRC20 transfer matching this transaction was found. Check the network, recipient and confirmation status." }, 400);
+        const receivedMicros = BigInt(String(transfer.value || "0"));
+        const expectedMicros = BigInt(Math.round(Number(payment.amount_usdt) * 1_000_000));
+        if (receivedMicros !== expectedMicros) return json({ error: "The confirmed transfer amount does not match the requested amount." }, 400);
+        if (payment.txid && payment.txid !== txid) return json({ error: "A different transaction ID is already attached to this payment." }, 409);
+
+        await env.DB.batch([
+          env.DB.prepare("UPDATE crypto_payments SET txid=?,status='paid',paid_at=datetime('now'),updated_at=datetime('now') WHERE id=? AND status='pending'").bind(txid, paymentId),
+          env.DB.prepare("UPDATE challenges SET status='active',started_at=COALESCE(started_at,datetime('now')),updated_at=datetime('now') WHERE id=? AND user_id=? AND status='pending'").bind(payment.challenge_id, session.user_id),
+          env.DB.prepare("INSERT INTO audit_logs (id,actor_user_id,action,target_type,target_id,details_json) VALUES (?,?,?,'crypto_payment',?,?)")
+            .bind(id(), session.user_id, "crypto_payment.confirmed", paymentId, JSON.stringify({ txid, amount_usdt: payment.amount_usdt, network: "TRC20" }))
+        ]);
+        return json({ ok: true, status: "paid", challenge_status: "active", message: "Confirmed USDT payment. Your evaluation is now active." });
       }
 
       if (url.pathname === "/api/dashboard" && request.method === "GET") {
