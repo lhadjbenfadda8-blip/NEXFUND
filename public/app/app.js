@@ -13,17 +13,24 @@ async function loadPrograms(){const data=await api("/api/programs");$("programLi
 function selectProgram(programId,programs){selectedProgram=programs.find(p=>p.id===programId);if(!selectedProgram)return;$("selectedProgramName").textContent=money(selectedProgram.account_size_usd)+" — "+money(selectedProgram.fee_usd)+" رسوم مقترحة";$("platformStep").classList.remove("hidden");$("platformStep").scrollIntoView({behavior:"smooth",block:"center"});}
 $("confirmSelection").addEventListener("click",async()=>{if(!selectedProgram)return;const button=$("confirmSelection");button.disabled=true;$("selectionMessage").textContent="جارٍ حفظ اختيارك…";try{const result=await api("/api/challenges",{method:"POST",body:JSON.stringify({program_id:selectedProgram.id,platform:"MT5"})});$("selectionMessage").textContent="تم إنشاء طلبك. افتح تفاصيل الدفع أدناه.";activePaymentId=result.payment_id;await showPayment(activePaymentId);await loadDashboard();}catch(error){$("selectionMessage").textContent=error.message;}finally{button.disabled=false;}});
 async function showPayment(paymentId){
+  $("paymentPanel").classList.remove("hidden");
+  $("paymentStatus").textContent="جارٍ تحميل تفاصيل طلب الدفع…";
   try{
     const data=await api("/api/payments/"+encodeURIComponent(paymentId));
     const p=data.payment;
-    $("paymentPanel").classList.remove("hidden");
     $("paymentAmount").textContent=Number(p.amount_usdt).toFixed(2)+" USDT";
-    $("paymentAddress").textContent=data.receiving_address;
+    $("paymentAddress").textContent=data.receiving_address || "عنوان الاستقبال غير مضبوط في إعدادات Cloudflare.";
     $("paymentNetwork").textContent=data.network+" — "+data.token;
     $("paymentStatus").textContent=p.status==="paid"?"تم تأكيد الدفع": "بانتظار التحويل";
-    $("paymentWarning").textContent=data.payment_enabled?"أرسل المبلغ المحدد فقط، ثم أدخل TXID للتحقق.":"وضع الدفع غير مفعّل حالياً؛ لن يتم قبول أو تفعيل أي دفعة حتى اكتمال إعدادات الخادم.";
-    $("verifyPaymentBtn").disabled=!data.payment_enabled || p.status==="paid";
-  }catch(error){$("paymentStatus").textContent=error.message;}
+    $("paymentWarning").textContent=!data.configuration_ready
+      ?"لم يتمكن الخادم من قراءة USDT_TRC20_ADDRESS. راجع اسم Secret في Cloudflare. لا ترسل أي أموال."
+      :"وضع الدفع غير مفعّل حالياً؛ لن يتم قبول أو تفعيل أي دفعة حتى اكتمال الاختبارات.";
+    $("verifyPaymentBtn").disabled=true;
+  }catch(error){
+    $("paymentStatus").textContent="تعذر تحميل تفاصيل الدفع: "+error.message;
+    $("paymentWarning").textContent="لا ترسل أي أموال. نحتاج إصلاح إعدادات الخادم أولاً.";
+    $("verifyPaymentBtn").disabled=true;
+  }
 }
 $("verifyPaymentBtn").addEventListener("click",async()=>{
   if(!activePaymentId)return;
