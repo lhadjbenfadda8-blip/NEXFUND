@@ -224,6 +224,7 @@ export default {
         if (!challenge) return json({ error: 'Paid challenge not found.' }, 404);
         const oldDelivery = await env.DB.prepare('SELECT * FROM mt5_account_deliveries WHERE challenge_id=?').bind(challengeId).first();
         if (oldDelivery) {
+          if (oldDelivery.email_status === 'sent') return json({ ok: true, provisioned: true, email_status: 'sent', message: 'Credentials email was already sent.' });
           const account = await env.DB.prepare('SELECT account_login,server_name FROM trading_accounts WHERE challenge_id=?').bind(challengeId).first();
           const mail = await sendMT5CredentialsEmail(env, challenge, account, oldDelivery);
           return json({ ok: mail.ok, provisioned: true, email_status: mail.ok ? 'sent' : 'failed' }, mail.ok ? 200 : 502);
@@ -293,7 +294,7 @@ async function sendMT5CredentialsEmail(env,challenge,account,delivery) {
     if(!env.RESEND_API_KEY||!env.MT5_EMAIL_FROM||!env.CREDENTIALS_ENCRYPTION_KEY) throw new Error('Email configuration missing.');
     const password=await decryptCredential(delivery.encrypted_password,delivery.encryption_iv,env.CREDENTIALS_ENCRYPTION_KEY);
     const login=String(account?.account_login||''), server=String(account?.server_name||'NEXFUND');
-    const esc=v=>String(v).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));
+    const esc=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const html='<div style="font-family:Arial,sans-serif;line-height:1.7"><h2>NEXFUND — بيانات حساب MetaTrader 5</h2><p>تم تجهيز حساب المحاكاة الخاص بك.</p><p><b>Server:</b> '+esc(server)+'<br><b>Login:</b> '+esc(login)+'<br><b>Password:</b> '+esc(password)+'<br><b>Balance:</b> '+Number(challenge.account_size_usd).toLocaleString('en-US')+' USD (virtual)</p><p>افتح MT5 واختر تسجيل الدخول إلى حساب موجود. هذا حساب محاكاة بأموال افتراضية وليس حساباً بأموال حقيقية.</p><p>غيّر كلمة المرور فور تسجيل الدخول إذا كان المزود يتيح ذلك، ولا تشاركها.</p><p>فريق NEXFUND</p></div>';
     const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+env.RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:env.MT5_EMAIL_FROM,to:[challenge.email],subject:'بيانات حساب NEXFUND MT5',html})});
     if(!response.ok){const detail=await response.text();await env.DB.prepare("UPDATE mt5_account_deliveries SET email_status='failed',last_error=?,emailed_at=NULL WHERE id=?").bind(detail.slice(0,500),delivery.id).run();return {ok:false};}
