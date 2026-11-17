@@ -38,3 +38,31 @@ Do not expose database credentials or secrets in source control. The initial adm
 - `GET /api/admin/users` (admin)
 
 All money and risk rules are provisional configuration data. Do not accept real payments or offer live funded accounts until the operating, legal, payment and platform-provider requirements have been resolved.
+
+## MT5 account provisioning and credential email
+
+The API includes a provider-agnostic provisioning adapter at
+`POST /api/admin/challenges/{challenge_id}/provision`. It only accepts a
+challenge whose USDT payment is confirmed and requires an administrator session.
+The configured provider must implement the NEXFUND adapter contract:
+
+- Accept HTTPS POST with a Bearer API key and an `Idempotency-Key` header.
+- Accept JSON fields: `external_reference`, `brand`, `server_name`,
+  `platform`, `account_type`, `balance`, `currency`, and `trader_email`.
+- Return JSON fields: `login` (numeric string), `server`, `password`,
+  and optionally `account_ref`.
+
+Required Cloudflare Worker runtime settings (never commit secrets):
+- `MT5_PROVIDER_API_URL` — provider's HTTPS provisioning endpoint.
+- `MT5_PROVIDER_API_KEY` — provider API key (Secret).
+- `RESEND_API_KEY` — Resend API key (Secret).
+- `MT5_EMAIL_FROM` — verified sender address, e.g. an address on a domain verified with Resend.
+- `CREDENTIALS_ENCRYPTION_KEY` — base64-encoded 32-byte random key (Secret).
+
+The MT5 password is encrypted with AES-GCM before it is stored in D1 and is
+decrypted only for email delivery. The email contains the account login,
+server and password and clearly labels the balance as virtual/simulated.
+Email delivery uses Resend. The endpoint is not operational until a compatible
+MT5 provider and a verified sender domain are configured. Do not enable live
+payments or advertise account delivery until the provider contract, account
+creation, email delivery and failure/retry paths have been tested end-to-end.
