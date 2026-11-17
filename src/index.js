@@ -20,6 +20,22 @@ async function ensureDefaultPrograms(db) {
   await db.batch(statements);
 }
 
+async function ensureCryptoPayments(db) {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS crypto_payments (
+    id TEXT PRIMARY KEY,
+    challenge_id TEXT NOT NULL UNIQUE REFERENCES challenges(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    amount_usdt REAL NOT NULL CHECK (amount_usdt > 0),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','expired','rejected')),
+    txid TEXT UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    paid_at TEXT
+  )`).run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_crypto_payments_user ON crypto_payments(user_id,created_at)").run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_crypto_payments_status ON crypto_payments(status)").run();
+}
+
 const id = () => crypto.randomUUID();
 
 export default {
@@ -95,6 +111,7 @@ export default {
       }
 
       if (url.pathname === "/api/challenges" && request.method === "POST") {
+        await ensureCryptoPayments(env.DB);
         const body = await request.json();
         const programId = String(body.program_id || "");
         const platform = String(body.platform || "");
@@ -120,6 +137,7 @@ export default {
       }
 
       if (url.pathname.startsWith("/api/payments/") && request.method === "GET") {
+        await ensureCryptoPayments(env.DB);
         const paymentId = url.pathname.split("/")[3];
         const payment = await env.DB.prepare("SELECT id,challenge_id,amount_usdt,status,txid,created_at,paid_at FROM crypto_payments WHERE id=? AND user_id=?").bind(paymentId, session.user_id).first();
         if (!payment) return json({ error: "Payment request not found." }, 404);
@@ -128,6 +146,7 @@ export default {
       }
 
       if (url.pathname.startsWith("/api/payments/") && url.pathname.endsWith("/verify") && request.method === "POST") {
+        await ensureCryptoPayments(env.DB);
         if (env.PAYMENTS_ENABLED !== "true") return json({ error: "Crypto payments are not enabled yet." }, 503);
         if (!env.USDT_TRC20_ADDRESS) return json({ error: "Receiving address is not configured." }, 503);
         const paymentId = url.pathname.split("/")[3];
