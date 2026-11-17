@@ -25,6 +25,16 @@
 <div class="notice">اختر حجم حساب التقييم، ثم منصة التداول. الحسابات المعروضة افتراضية وتجريبية.</div>
 <h3>1. اختر حجم الحساب</h3><p id="programNotice" class="sub"></p><div id="programList" class="program-grid"><p class="empty">جارٍ تحميل الحسابات…</p></div>
 <div id="platformStep" class="platform-step hidden"><h3>2. اختر منصة التداول</h3><div class="platform-choice"><strong>MetaTrader 5 (MT5)</strong><span>متاحة كخيار للربط التجريبي؛ الاتصال الفعلي لم يُفعّل بعد.</span></div><p id="selectedProgramName" class="selected-name"></p><button id="confirmSelection" class="primary" type="button">تأكيد اختيار الحساب والمنصة</button><p id="selectionMessage" class="message" role="status"></p></div>
+<section id="paymentPanel" class="payment-panel hidden">
+<h3>3. الدفع عبر USDT (TRC20)</h3>
+<p>المبلغ المطلوب: <strong id="paymentAmount"></strong></p>
+<p>الشبكة: <strong id="paymentNetwork"></strong></p>
+<p class="wallet-address" id="paymentAddress"></p>
+<label>رقم المعاملة (TXID)<input id="paymentTxid" type="text" dir="ltr" autocomplete="off" placeholder="64-character transaction ID"></label>
+<button id="verifyPaymentBtn" class="primary" type="button">تحقق من التحويل</button>
+<p id="paymentStatus" class="message" role="status"></p>
+<p id="paymentWarning" class="sub"></p>
+</section>
 <h3>حساباتك المختارة</h3><div id="challengeList" class="empty">لا توجد حسابات تقييم بعد.</div>
 <h3>الإشعارات</h3><div id="notifications" class="empty">لا توجد إشعارات.</div>
 </section>
