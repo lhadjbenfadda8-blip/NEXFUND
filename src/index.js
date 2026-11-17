@@ -215,6 +215,15 @@ export default {
         return json({ challenges: rows.results });
       }
 
+      if (url.pathname === "/api/admin/challenges/pending-provisioning" && request.method === "GET") {
+        const denied = requireAdmin(session); if (denied) return denied;
+        await ensureMT5DeliveryTable(env.DB);
+        const rows = await env.DB.prepare(
+          "SELECT c.id AS challenge_id,u.email,p.name AS program_name,p.account_size_usd,cp.amount_usdt,cp.paid_at,c.created_at,td.email_status,t.account_login,t.server_name FROM challenges c JOIN users u ON u.id=c.user_id JOIN evaluation_programs p ON p.id=c.program_id JOIN crypto_payments cp ON cp.challenge_id=c.id LEFT JOIN mt5_account_deliveries td ON td.challenge_id=c.id LEFT JOIN trading_accounts t ON t.challenge_id=c.id WHERE cp.status='paid' AND (td.id IS NULL OR td.email_status='failed') ORDER BY cp.paid_at ASC LIMIT 100"
+        ).all();
+        return json({ challenges: rows.results });
+      }
+
       const provisionMatch = url.pathname.match(/^\/api\/admin\/challenges\/([a-f0-9-]+)\/provision$/i);
       if (provisionMatch && request.method === 'POST') {
         const denied = requireAdmin(session); if (denied) return denied;
