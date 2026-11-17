@@ -119,6 +119,12 @@ export default {
         await ensureDefaultPrograms(env.DB);
         const program = await env.DB.prepare("SELECT id,account_size_usd,fee_usd FROM evaluation_programs WHERE id=? AND status='active'").bind(programId).first();
         if (!program) return json({ error: "The selected evaluation program is unavailable." }, 404);
+        const existing = await env.DB.prepare(
+          "SELECT c.id AS challenge_id,p.id AS payment_id,p.amount_usdt,p.status AS payment_status FROM challenges c JOIN crypto_payments p ON p.challenge_id=c.id WHERE c.user_id=? AND c.program_id=? AND c.status='pending' AND p.status='pending' ORDER BY c.created_at DESC LIMIT 1"
+        ).bind(session.user_id, program.id).first();
+        if (existing) {
+          return json({ ok: true, challenge_id: existing.challenge_id, payment_id: existing.payment_id, status: "pending", platform, reused: true, message: "An existing pending request was found and reused." }, 200);
+        }
         const challengeId = id();
         const balance = Number(program.account_size_usd);
         const today = new Date().toISOString().slice(0,10);
@@ -141,8 +147,7 @@ export default {
         const paymentId = url.pathname.split("/")[3];
         const payment = await env.DB.prepare("SELECT id,challenge_id,amount_usdt,status,txid,created_at,paid_at FROM crypto_payments WHERE id=? AND user_id=?").bind(paymentId, session.user_id).first();
         if (!payment) return json({ error: "Payment request not found." }, 404);
-        if (!env.USDT_TRC20_ADDRESS) return json({ error: "USDT TRC20 receiving address is not configured yet." }, 503);
-        return json({ payment, network: "TRON (TRC20)", token: "USDT", receiving_address: env.USDT_TRC20_ADDRESS, payment_enabled: env.PAYMENTS_ENABLED === "true" });
+        return json({ payment, network: "TRON (TRC20)", token: "USDT", receiving_address: env.USDT_TRC20_ADDRESS || null, configuration_ready: Boolean(env.USDT_TRC20_ADDRESS), payment_enabled: env.PAYMENTS_ENABLED === "true" });
       }
 
       if (url.pathname.startsWith("/api/payments/") && url.pathname.endsWith("/verify") && request.method === "POST") {
