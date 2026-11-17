@@ -3,6 +3,23 @@ import { json } from "./http.js";
 import { evaluateChallenge } from "./risk-engine.js";
 
 const now = () => new Date().toISOString();
+const DEFAULT_PROGRAMS = [
+  ["nexfund-eval-2000-v1", 2000, 25],
+  ["nexfund-eval-5000-v1", 5000, 49],
+  ["nexfund-eval-10000-v1", 10000, 89],
+  ["nexfund-eval-25000-v1", 25000, 189],
+  ["nexfund-eval-50000-v1", 50000, 289],
+  ["nexfund-eval-100000-v1", 100000, 499],
+  ["nexfund-eval-200000-v1", 200000, 899]
+];
+async function ensureDefaultPrograms(db) {
+  const statements = DEFAULT_PROGRAMS.map(([programId, size, fee]) =>
+    db.prepare("INSERT OR IGNORE INTO evaluation_programs (id,name,description,account_size_usd,fee_usd,profit_target_pct,daily_drawdown_pct,max_drawdown_pct,min_trading_days,status,rules_json) VALUES (?,?,?,?,?,8,5,10,5,'active',?)")
+      .bind(programId, `NEXFUND ${size.toLocaleString("en-US")} USD Evaluation`, "Single-phase evaluation proposal. MT5 demo integration only; terms and fee are provisional and configurable.", size, fee, JSON.stringify({ phase: "one_step", platform: "MT5", daily_loss_basis: "daily_start_equity", max_loss_basis: "initial_balance", fee_is_provisional: true }))
+  );
+  await db.batch(statements);
+}
+
 const id = () => crypto.randomUUID();
 
 export default {
@@ -70,9 +87,38 @@ export default {
       const session = await readSession(request, env.DB);
       if (!session) return json({ error: "Authentication required." }, 401);
 
+
+      if (url.pathname === "/api/programs" && request.method === "GET") {
+        await ensureDefaultPrograms(env.DB);
+        const rows = await env.DB.prepare("SELECT id,name,description,account_size_usd,fee_usd,profit_target_pct,daily_drawdown_pct,max_drawdown_pct,min_trading_days,max_trading_days FROM evaluation_programs WHERE status='active' ORDER BY account_size_usd ASC").all();
+        return json({ programs: rows.results, pricing_status: "provisional" });
+      }
+
+      if (url.pathname === "/api/challenges" && request.method === "POST") {
+        const body = await request.json();
+        const programId = String(body.program_id || "");
+        const platform = String(body.platform || "");
+        if (platform !== "MT5") return json({ error: "Currently only MetaTrader 5 (MT5) is supported." }, 400);
+        await ensureDefaultPrograms(env.DB);
+        const program = await env.DB.prepare("SELECT id,account_size_usd FROM evaluation_programs WHERE id=? AND status='active'").bind(programId).first();
+        if (!program) return json({ error: "The selected evaluation program is unavailable." }, 404);
+        const challengeId = id();
+        const balance = Number(program.account_size_usd);
+        const today = new Date().toISOString().slice(0,10);
+        await env.DB.batch([
+          env.DB.prepare("INSERT INTO challenges (id,user_id,program_id,status,initial_balance,current_balance,equity,high_watermark,daily_start_equity,daily_start_date) VALUES (?,?,?,'pending',?,?,?,?,?,?)")
+            .bind(challengeId, session.user_id, program.id, balance, balance, balance, balance, balance, today),
+          env.DB.prepare("INSERT INTO trading_accounts (id,challenge_id,platform,integration_mode,connection_status) VALUES (?,?,?,'demo','not_connected')")
+            .bind(id(), challengeId, platform),
+          env.DB.prepare("INSERT INTO audit_logs (id,actor_user_id,action,target_type,target_id,details_json) VALUES (?,?,?,'challenge',?,?)")
+            .bind(id(), session.user_id, "challenge.selection_created", challengeId, JSON.stringify({ platform, program_id: program.id }))
+        ]);
+        return json({ ok: true, challenge_id: challengeId, status: "pending", platform, message: "Your evaluation selection has been saved. Payment and MT5 credentials are not enabled yet." }, 201);
+      }
+
       if (url.pathname === "/api/dashboard" && request.method === "GET") {
         const challenges = await env.DB.prepare(
-          "SELECT c.id,c.status,c.initial_balance,c.current_balance,c.equity,c.high_watermark,c.daily_start_equity,c.daily_start_date,c.started_at,c.created_at,p.name AS program_name,p.profit_target_pct,p.daily_drawdown_pct,p.max_drawdown_pct FROM challenges c JOIN evaluation_programs p ON p.id=c.program_id WHERE c.user_id=? ORDER BY c.created_at DESC"
+          "SELECT c.id,c.status,c.initial_balance,c.current_balance,c.equity,c.high_watermark,c.daily_start_equity,c.daily_start_date,c.started_at,c.created_at,p.name AS program_name,p.profit_target_pct,p.daily_drawdown_pct,p.max_drawdown_pct,t.platform,t.connection_status FROM challenges c JOIN evaluation_programs p ON p.id=c.program_id LEFT JOIN trading_accounts t ON t.challenge_id=c.id WHERE c.user_id=? ORDER BY c.created_at DESC"
         ).bind(session.user_id).all();
         const notifications = await env.DB.prepare("SELECT id,title,body,created_at,read_at FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 20").bind(session.user_id).all();
         return json({ challenges: challenges.results, notifications: notifications.results });
