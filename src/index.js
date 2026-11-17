@@ -114,13 +114,13 @@ async function hashPassword(password) {
   const saltBytes = crypto.getRandomValues(new Uint8Array(16));
   const salt = toBase64(saltBytes);
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: saltBytes, iterations: 310000, hash: "SHA-256" }, key, 256);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: saltBytes, iterations: 100000, hash: "SHA-256" }, key, 256);
   return { salt, hash: toBase64(new Uint8Array(bits)) };
 }
 async function verifyPassword(password, salt, expected) {
   if (typeof password !== "string" || typeof salt !== "string" || typeof expected !== "string") return false;
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: fromBase64(salt), iterations: 310000, hash: "SHA-256" }, key, 256);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: fromBase64(salt), iterations: 100000, hash: "SHA-256" }, key, 256);
   return constantTimeEqual(toBase64(new Uint8Array(bits)), expected);
 }
 async function createSession(db, userId) {
