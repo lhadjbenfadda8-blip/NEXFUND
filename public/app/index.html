@@ -1,31 +1,33 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#080d18">
-<title>Trader Portal | NEXFUND</title>
+<title>بوابة المتداول | NEXFUND</title>
 <link rel="stylesheet" href="/app/app.css">
 <script src="/app/app.js" defer></script>
 </head>
 <body>
-<header class="top"><a class="brand" href="/"><span class="mark">N</span>NEX<span>FUND</span></a><a href="/">Back to website</a></header>
+<header class="top"><a class="brand" href="/"><span class="mark">N</span>NEX<span>FUND</span></a><a href="/">الموقع الرئيسي</a></header>
 <main class="wrap">
-<section class="intro"><p class="eyebrow">NEXFUND TRADER PORTAL</p><h1>Your trading journey,<br><span>in one place.</span></h1><p class="sub">Secure account access and evaluation overview.</p></section>
+<section class="intro"><p class="eyebrow">بوابة متداولي NEXFUND</p><h1>رحلتك في التداول،<br><span>في مكان واحد.</span></h1><p class="sub">دخول آمن واختيار برنامج التقييم المناسب.</p></section>
 <section id="auth" class="panel">
-<div class="tabs"><button id="loginTab" class="active" type="button">Sign in</button><button id="registerTab" type="button">Create account</button></div>
+<div class="tabs"><button id="loginTab" class="active" type="button">تسجيل الدخول</button><button id="registerTab" type="button">إنشاء حساب</button></div>
 <form id="authForm">
-<label>Email address<input id="email" type="email" autocomplete="email" required maxlength="254"></label>
-<label>Password<input id="password" type="password" autocomplete="current-password" required minlength="12" maxlength="128"><small>Use at least 12 characters.</small></label>
-<button class="primary" id="submitBtn" type="submit">Sign in</button>
+<label>البريد الإلكتروني<input id="email" type="email" autocomplete="email" required maxlength="254"></label>
+<label>كلمة المرور<input id="password" type="password" autocomplete="current-password" required minlength="12" maxlength="128"><small>استخدم 12 حرفاً على الأقل.</small></label>
+<button class="primary" id="submitBtn" type="submit">تسجيل الدخول</button>
 <p id="authMessage" class="message" role="status"></p>
 </form>
 </section>
 <section id="dashboard" class="panel hidden">
-<div class="dash-head"><div><p class="eyebrow">TRADER DASHBOARD</p><h2>Welcome back</h2><p id="userEmail" class="sub"></p></div><button id="logoutBtn" class="secondary" type="button">Sign out</button></div>
-<div class="notice">Your account is active. Evaluation programs and live MT5 connectivity are not enabled yet.</div>
-<h3>Your evaluations</h3><div id="challengeList" class="empty">No evaluation accounts yet.</div>
-<h3>Notifications</h3><div id="notifications" class="empty">No notifications.</div>
+<div class="dash-head"><div><p class="eyebrow">لوحة تحكم المتداول</p><h2>مرحباً بك</h2><p id="userEmail" class="sub"></p></div><button id="logoutBtn" class="secondary" type="button">تسجيل الخروج</button></div>
+<div class="notice">اختر حجم حساب التقييم، ثم منصة التداول. الحسابات المعروضة افتراضية وتجريبية.</div>
+<h3>1. اختر حجم الحساب</h3><p id="programNotice" class="sub"></p><div id="programList" class="program-grid"><p class="empty">جارٍ تحميل الحسابات…</p></div>
+<div id="platformStep" class="platform-step hidden"><h3>2. اختر منصة التداول</h3><div class="platform-choice"><strong>MetaTrader 5 (MT5)</strong><span>متاحة كخيار للربط التجريبي؛ الاتصال الفعلي لم يُفعّل بعد.</span></div><p id="selectedProgramName" class="selected-name"></p><button id="confirmSelection" class="primary" type="button">تأكيد اختيار الحساب والمنصة</button><p id="selectionMessage" class="message" role="status"></p></div>
+<h3>حساباتك المختارة</h3><div id="challengeList" class="empty">لا توجد حسابات تقييم بعد.</div>
+<h3>الإشعارات</h3><div id="notifications" class="empty">لا توجد إشعارات.</div>
 </section>
-<p class="foot">Preview environment. No paid challenges, trading, or funding services are currently offered.</p>
+<p class="foot">بيئة تجريبية. الأسعار والشروط مقترحة وقابلة للتعديل. لا توجد مدفوعات أو حسابات تداول ممولة أو اتصال MT5 فعلي مفعّل حالياً.</p>
 </main>
 </body></html>
