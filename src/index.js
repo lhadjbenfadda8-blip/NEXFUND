@@ -20,6 +20,15 @@ async function ensureDefaultPrograms(db) {
   await db.batch(statements);
 }
 
+async function ensureMT5DeliveryTable(db) {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS mt5_account_deliveries (
+    id TEXT PRIMARY KEY, challenge_id TEXT NOT NULL UNIQUE REFERENCES challenges(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, encrypted_password TEXT NOT NULL, encryption_iv TEXT NOT NULL,
+    email_status TEXT NOT NULL DEFAULT 'pending' CHECK (email_status IN ('pending','sent','failed')),
+    provider_account_ref TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), emailed_at TEXT, last_error TEXT
+  )`).run();
+  await db.prepare('CREATE INDEX IF NOT EXISTS idx_mt5_delivery_user ON mt5_account_deliveries(user_id,created_at)').run();
+}
 async function ensureCryptoPayments(db) {
   await db.prepare(`CREATE TABLE IF NOT EXISTS crypto_payments (
     id TEXT PRIMARY KEY,
@@ -185,7 +194,7 @@ export default {
 
         await env.DB.batch([
           env.DB.prepare("UPDATE crypto_payments SET txid=?,status='paid',paid_at=datetime('now'),updated_at=datetime('now') WHERE id=? AND status='pending'").bind(txid, paymentId),
-          env.DB.prepare("UPDATE challenges SET status='active',started_at=COALESCE(started_at,datetime('now')),updated_at=datetime('now') WHERE id=? AND user_id=? AND status='pending'").bind(payment.challenge_id, session.user_id),
+          env.DB.prepare("UPDATE challenges SET updated_at=datetime('now') WHERE id=? AND user_id=? AND status='pending'").bind(payment.challenge_id, session.user_id),
           env.DB.prepare("INSERT INTO audit_logs (id,actor_user_id,action,target_type,target_id,details_json) VALUES (?,?,?,'crypto_payment',?,?)")
             .bind(id(), session.user_id, "crypto_payment.confirmed", paymentId, JSON.stringify({ txid, amount_usdt: payment.amount_usdt, network: "TRC20" }))
         ]);
@@ -194,7 +203,7 @@ export default {
 
       if (url.pathname === "/api/dashboard" && request.method === "GET") {
         const challenges = await env.DB.prepare(
-          "SELECT c.id,c.status,c.initial_balance,c.current_balance,c.equity,c.high_watermark,c.daily_start_equity,c.daily_start_date,c.started_at,c.created_at,p.name AS program_name,p.profit_target_pct,p.daily_drawdown_pct,p.max_drawdown_pct,t.platform,t.connection_status FROM challenges c JOIN evaluation_programs p ON p.id=c.program_id LEFT JOIN trading_accounts t ON t.challenge_id=c.id WHERE c.user_id=? ORDER BY c.created_at DESC"
+          "SELECT c.id,c.status,c.initial_balance,c.current_balance,c.equity,c.high_watermark,c.daily_start_equity,c.daily_start_date,c.started_at,c.created_at,p.name AS program_name,p.profit_target_pct,p.daily_drawdown_pct,p.max_drawdown_pct,t.platform,t.connection_status,t.account_login,t.server_name FROM challenges c JOIN evaluation_programs p ON p.id=c.program_id LEFT JOIN trading_accounts t ON t.challenge_id=c.id WHERE c.user_id=? ORDER BY c.created_at DESC"
         ).bind(session.user_id).all();
         const notifications = await env.DB.prepare("SELECT id,title,body,created_at,read_at FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 20").bind(session.user_id).all();
         return json({ challenges: challenges.results, notifications: notifications.results });
@@ -206,6 +215,42 @@ export default {
         return json({ challenges: rows.results });
       }
 
+      const provisionMatch = url.pathname.match(/^\/api\/admin\/challenges\/([a-f0-9-]+)\/provision$/i);
+      if (provisionMatch && request.method === 'POST') {
+        const denied = requireAdmin(session); if (denied) return denied;
+        await ensureMT5DeliveryTable(env.DB);
+        const challengeId = provisionMatch[1];
+        const challenge = await env.DB.prepare("SELECT c.id,c.status,u.id AS user_id,u.email,p.account_size_usd FROM challenges c JOIN users u ON u.id=c.user_id JOIN evaluation_programs p ON p.id=c.program_id JOIN crypto_payments cp ON cp.challenge_id=c.id WHERE c.id=? AND cp.status='paid'").bind(challengeId).first();
+        if (!challenge) return json({ error: 'Paid challenge not found.' }, 404);
+        const oldDelivery = await env.DB.prepare('SELECT * FROM mt5_account_deliveries WHERE challenge_id=?').bind(challengeId).first();
+        if (oldDelivery) {
+          const account = await env.DB.prepare('SELECT account_login,server_name FROM trading_accounts WHERE challenge_id=?').bind(challengeId).first();
+          const mail = await sendMT5CredentialsEmail(env, challenge, account, oldDelivery);
+          return json({ ok: mail.ok, provisioned: true, email_status: mail.ok ? 'sent' : 'failed' }, mail.ok ? 200 : 502);
+        }
+        const providerUrl = String(env.MT5_PROVIDER_API_URL || '');
+        if (!providerUrl || !env.MT5_PROVIDER_API_KEY || !env.RESEND_API_KEY || !env.MT5_EMAIL_FROM || !env.CREDENTIALS_ENCRYPTION_KEY) return json({ error: 'Configure MT5_PROVIDER_API_URL, MT5_PROVIDER_API_KEY, RESEND_API_KEY, MT5_EMAIL_FROM and CREDENTIALS_ENCRYPTION_KEY as Worker runtime secrets/variables first. No account was created.' }, 503);
+        let endpoint; try { endpoint = new URL(providerUrl); } catch { return json({ error: 'Invalid MT5 provider URL.' }, 503); }
+        if (endpoint.protocol !== 'https:') return json({ error: 'MT5 provider endpoint must use HTTPS.' }, 503);
+        let providerResponse;
+        try { providerResponse = await fetch(endpoint.toString(), { method:'POST', headers:{ Authorization:'Bearer '+env.MT5_PROVIDER_API_KEY, 'Content-Type':'application/json', 'Idempotency-Key':challengeId }, body:JSON.stringify({ external_reference:challengeId, brand:'NEXFUND', server_name:'NEXFUND', platform:'MT5', account_type:'simulated', balance:Number(challenge.account_size_usd), currency:'USD', trader_email:challenge.email }) }); }
+        catch { return json({ error:'Could not reach MT5 provider.' }, 502); }
+        if (!providerResponse.ok) return json({ error:'MT5 provider rejected account provisioning.' }, 502);
+        let result; try { result = await providerResponse.json(); } catch { return json({ error:'MT5 provider returned invalid JSON.' }, 502); }
+        const login=String(result.login||''), server=String(result.server||'NEXFUND'), password=String(result.password||''), accountRef=String(result.account_ref||challengeId);
+        if (!/^[0-9]{4,20}$/.test(login) || !password || password.length>128 || server.length>100) return json({ error:'Provider response must contain numeric login, server and password. Nothing was saved or emailed.' }, 502);
+        let encrypted; try { encrypted=await encryptCredential(password,env.CREDENTIALS_ENCRYPTION_KEY); } catch { return json({ error:'Credential encryption key is invalid; no credentials were saved.' }, 503); }
+        const deliveryId=id();
+        await env.DB.batch([
+          env.DB.prepare('UPDATE trading_accounts SET account_login=?,server_name=?,external_account_ref=? WHERE challenge_id=?').bind(login,server,accountRef,challengeId),
+          env.DB.prepare("INSERT INTO mt5_account_deliveries (id,challenge_id,user_id,encrypted_password,encryption_iv,provider_account_ref,email_status) VALUES (?,?,?,?,?,?,'pending')").bind(deliveryId,challengeId,challenge.user_id,encrypted.ciphertext,encrypted.iv,accountRef),
+          env.DB.prepare("UPDATE challenges SET status='active',started_at=COALESCE(started_at,datetime('now')),updated_at=datetime('now') WHERE id=? AND status='pending'").bind(challengeId),
+          env.DB.prepare('INSERT INTO audit_logs (id,actor_user_id,action,target_type,target_id,details_json) VALUES (?,?,?,\'trading_account\',?,?)').bind(id(),session.user_id,'mt5_account.provisioned',challengeId,JSON.stringify({login,server,provider:endpoint.hostname}))
+        ]);
+        const delivery=await env.DB.prepare('SELECT * FROM mt5_account_deliveries WHERE challenge_id=?').bind(challengeId).first();
+        const mail=await sendMT5CredentialsEmail(env,challenge,{account_login:login,server_name:server},delivery);
+        return json({ok:mail.ok,provisioned:true,email_status:mail.ok?'sent':'failed',login,server,message:mail.ok?'MT5 account provisioned and credentials email sent.':'Account created, but email failed. Retry after fixing email configuration.'},mail.ok?201:502);
+      }
       if (url.pathname === "/api/admin/overview" && request.method === "GET") {
         const denied = requireAdmin(session);
         if (denied) return denied;
@@ -232,6 +277,30 @@ export default {
   }
 };
 
+async function encryptCredential(password,keyText) {
+  const raw=Uint8Array.from(atob(keyText),c=>c.charCodeAt(0)); if(raw.length!==32) throw new Error('Key must be base64 for 32 bytes.');
+  const key=await crypto.subtle.importKey('raw',raw,'AES-GCM',false,['encrypt']); const iv=crypto.getRandomValues(new Uint8Array(12));
+  const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(password));
+  return {ciphertext:toBase64(new Uint8Array(cipher)),iv:toBase64(iv)};
+}
+async function decryptCredential(ciphertext,ivText,keyText) {
+  const raw=Uint8Array.from(atob(keyText),c=>c.charCodeAt(0)); if(raw.length!==32) throw new Error('Invalid key.');
+  const key=await crypto.subtle.importKey('raw',raw,'AES-GCM',false,['decrypt']);
+  const clear=await crypto.subtle.decrypt({name:'AES-GCM',iv:fromBase64(ivText)},key,fromBase64(ciphertext)); return new TextDecoder().decode(clear);
+}
+async function sendMT5CredentialsEmail(env,challenge,account,delivery) {
+  try {
+    if(!env.RESEND_API_KEY||!env.MT5_EMAIL_FROM||!env.CREDENTIALS_ENCRYPTION_KEY) throw new Error('Email configuration missing.');
+    const password=await decryptCredential(delivery.encrypted_password,delivery.encryption_iv,env.CREDENTIALS_ENCRYPTION_KEY);
+    const login=String(account?.account_login||''), server=String(account?.server_name||'NEXFUND');
+    const esc=v=>String(v).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));
+    const html='<div style="font-family:Arial,sans-serif;line-height:1.7"><h2>NEXFUND — بيانات حساب MetaTrader 5</h2><p>تم تجهيز حساب المحاكاة الخاص بك.</p><p><b>Server:</b> '+esc(server)+'<br><b>Login:</b> '+esc(login)+'<br><b>Password:</b> '+esc(password)+'<br><b>Balance:</b> '+Number(challenge.account_size_usd).toLocaleString('en-US')+' USD (virtual)</p><p>افتح MT5 واختر تسجيل الدخول إلى حساب موجود. هذا حساب محاكاة بأموال افتراضية وليس حساباً بأموال حقيقية.</p><p>غيّر كلمة المرور فور تسجيل الدخول إذا كان المزود يتيح ذلك، ولا تشاركها.</p><p>فريق NEXFUND</p></div>';
+    const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+env.RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:env.MT5_EMAIL_FROM,to:[challenge.email],subject:'بيانات حساب NEXFUND MT5',html})});
+    if(!response.ok){const detail=await response.text();await env.DB.prepare("UPDATE mt5_account_deliveries SET email_status='failed',last_error=?,emailed_at=NULL WHERE id=?").bind(detail.slice(0,500),delivery.id).run();return {ok:false};}
+    await env.DB.prepare("UPDATE mt5_account_deliveries SET email_status='sent',emailed_at=datetime('now'),last_error=NULL WHERE id=?").bind(delivery.id).run();
+    await env.DB.prepare('INSERT INTO notifications (id,user_id,title,body) VALUES (?,?,?,?)').bind(id(),challenge.user_id,'حساب MT5 جاهز','أرسلنا بيانات الدخول إلى بريدك الإلكتروني المسجل. تحقق من الرسائل غير المرغوب فيها أيضاً.').run(); return {ok:true};
+  } catch(error) { try{await env.DB.prepare("UPDATE mt5_account_deliveries SET email_status='failed',last_error=? WHERE id=?").bind(String(error).slice(0,500),delivery.id).run();}catch{} return {ok:false}; }
+}
 async function hashPassword(password) {
   const saltBytes = crypto.getRandomValues(new Uint8Array(16));
   const salt = toBase64(saltBytes);
