@@ -19,19 +19,18 @@ async function showPayment(paymentId){
     const data=await api("/api/payments/"+encodeURIComponent(paymentId));
     const p=data.payment;
     $("paymentAmount").textContent=Number(p.amount_usdt).toFixed(2)+" USDT";
+    $("paymentAddress").textContent=data.receiving_address || "عنوان الاستقبال غير مضبوط في إعدادات Cloudflare.";
+    $("paymentAddress").classList.remove("hidden");
+    $("paymentTxid").parentElement.classList.remove("hidden");
+    $("verifyPaymentBtn").classList.remove("hidden");
     $("paymentNetwork").textContent=data.network+" — "+data.token;
-    const paymentReady=Boolean(data.configuration_ready && data.payment_enabled);
-    $("paymentAddress").textContent=paymentReady ? (data.receiving_address || "") : "الدفع غير متاح حالياً.";
-    $("paymentAddress").classList.toggle("hidden",!paymentReady);
-    $("paymentTxid").parentElement.classList.toggle("hidden",!paymentReady);
-    $("verifyPaymentBtn").classList.toggle("hidden",!paymentReady);
-    $("paymentStatus").textContent=p.status==="paid"?"تم تأكيد الدفع": "لم يتم تفعيل الدفع لهذا الطلب.";
+    $("paymentStatus").textContent=p.status==="paid"?"تم تأكيد الدفع": "بانتظار التحويل";
     $("paymentWarning").textContent=!data.configuration_ready
-      ?"لم يتم إعداد وسيلة استقبال معتمدة على الخادم. لا ترسل أي أموال ولا تشارك رقم معاملة."
+      ?"عنوان الاستقبال غير مضبوط بعد. أضف USDT_TRC20_ADDRESS في إعدادات Worker على Cloudflare."
       :!data.payment_enabled
-        ?"ميزة الدفع متوقفة حالياً. لن يُطلب منك إرسال أموال قبل اعتماد وسيلة الدفع وتفعيلها رسمياً."
-        :"وسيلة الدفع مهيأة؛ اتبع تعليمات الدفع المعتمدة الظاهرة أعلاه.";
-    $("verifyPaymentBtn").disabled=!paymentReady;
+        ?"عنوان الاستقبال مضبوط، لكن التحقق الآلي متوقف حتى تفعيل إعداد PAYMENTS_ENABLED بعد اختبار النظام."
+        :"أدخل رقم المعاملة بعد التحويل ليتم التحقق من وصول USDT على شبكة TRON.";
+    $("verifyPaymentBtn").disabled=!data.configuration_ready || !data.payment_enabled;
   }catch(error){
     $("paymentStatus").textContent="تعذر تحميل تفاصيل الدفع: "+error.message;
     $("paymentWarning").textContent="لا ترسل أي أموال. نحتاج إصلاح إعدادات الخادم أولاً.";
