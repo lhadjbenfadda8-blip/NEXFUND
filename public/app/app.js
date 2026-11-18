@@ -19,13 +19,19 @@ async function showPayment(paymentId){
     const data=await api("/api/payments/"+encodeURIComponent(paymentId));
     const p=data.payment;
     $("paymentAmount").textContent=Number(p.amount_usdt).toFixed(2)+" USDT";
-    $("paymentAddress").textContent=data.receiving_address || "عنوان الاستقبال غير مضبوط في إعدادات Cloudflare.";
     $("paymentNetwork").textContent=data.network+" — "+data.token;
-    $("paymentStatus").textContent=p.status==="paid"?"تم تأكيد الدفع": "بانتظار التحويل";
+    const paymentReady=Boolean(data.configuration_ready && data.payment_enabled);
+    $("paymentAddress").textContent=paymentReady ? (data.receiving_address || "") : "الدفع غير متاح حالياً.";
+    $("paymentAddress").classList.toggle("hidden",!paymentReady);
+    $("paymentTxid").parentElement.classList.toggle("hidden",!paymentReady);
+    $("verifyPaymentBtn").classList.toggle("hidden",!paymentReady);
+    $("paymentStatus").textContent=p.status==="paid"?"تم تأكيد الدفع": "لم يتم تفعيل الدفع لهذا الطلب.";
     $("paymentWarning").textContent=!data.configuration_ready
-      ?"لم يتمكن الخادم من قراءة USDT_TRC20_ADDRESS. راجع اسم Secret في Cloudflare. لا ترسل أي أموال."
-      :"وضع الدفع غير مفعّل حالياً؛ لن يتم قبول أو تفعيل أي دفعة حتى اكتمال الاختبارات.";
-    $("verifyPaymentBtn").disabled=true;
+      ?"لم يتم إعداد وسيلة استقبال معتمدة على الخادم. لا ترسل أي أموال ولا تشارك رقم معاملة."
+      :!data.payment_enabled
+        ?"ميزة الدفع متوقفة حالياً. لن يُطلب منك إرسال أموال قبل اعتماد وسيلة الدفع وتفعيلها رسمياً."
+        :"وسيلة الدفع مهيأة؛ اتبع تعليمات الدفع المعتمدة الظاهرة أعلاه.";
+    $("verifyPaymentBtn").disabled=!paymentReady;
   }catch(error){
     $("paymentStatus").textContent="تعذر تحميل تفاصيل الدفع: "+error.message;
     $("paymentWarning").textContent="لا ترسل أي أموال. نحتاج إصلاح إعدادات الخادم أولاً.";
