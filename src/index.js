@@ -198,7 +198,7 @@ export default {
           env.DB.prepare("INSERT INTO audit_logs (id,actor_user_id,action,target_type,target_id,details_json) VALUES (?,?,?,'crypto_payment',?,?)")
             .bind(id(), session.user_id, "crypto_payment.confirmed", paymentId, JSON.stringify({ txid, amount_usdt: payment.amount_usdt, network: "TRC20" }))
         ]);
-        return json({ ok: true, status: "paid", challenge_status: "active", message: "Confirmed USDT payment. Your evaluation is now active." });
+        return json({ ok: true, status: "paid", challenge_status: "pending", message: "Payment confirmed. Your challenge is awaiting account provisioning; it will become active only after the trading account is successfully created." });
       }
 
       if (url.pathname === "/api/dashboard" && request.method === "GET") {
