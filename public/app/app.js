@@ -37,6 +37,13 @@ async function showPayment(paymentId){
     $("verifyPaymentBtn").disabled=true;
   }
 }
+async function copyCheckoutValue(value,label){
+  if(!value||value==="عنوان الاستقبال غير مضبوط في إعدادات Cloudflare."){$("paymentStatus").textContent="لا توجد قيمة جاهزة للنسخ.";return;}
+  try{await navigator.clipboard.writeText(value);$("paymentStatus").textContent="تم نسخ "+label+" إلى الحافظة.";}
+  catch{$("paymentStatus").textContent="تعذر النسخ تلقائيًا. حدّد النص وانسخه يدويًا.";}
+}
+$("copyAddressBtn").addEventListener("click",()=>copyCheckoutValue($("paymentAddress").textContent.trim(),"عنوان المحفظة"));
+$("copyAmountBtn").addEventListener("click",()=>copyCheckoutValue($("paymentAmount").textContent.trim(),"المبلغ"));
 $("verifyPaymentBtn").addEventListener("click",async()=>{
   if(!activePaymentId)return;
   const txid=$("paymentTxid").value.trim();
