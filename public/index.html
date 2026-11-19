@@ -1,224 +1,42 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#080d18">
-  <meta name="description" content="NEXFUND — A modern trading evaluation platform built for disciplined traders.">
-  <title>NEXFUND | Trade With Purpose</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
-  <script src="script.js" defer></script>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#07101d"><meta name="description" content="NEXFUND trading evaluation — structured challenges, transparent risk rules, and a trader-first dashboard.">
+<title>NEXFUND — Earn Your Next Level</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css"><script src="script.js" defer></script>
 </head>
 <body>
-  <div class="announcement">
-    <span class="status-dot"></span>
-    A new approach to trader evaluation
-  </div>
-
-  <header class="site-header">
-    <a class="brand" href="#home" aria-label="NEXFUND home">
-      <span class="brand-mark">N</span>
-      <span>NEX<span>FUND</span></span>
-    </a>
-
-    <button class="menu-toggle" id="menuToggle" aria-label="Open navigation" aria-expanded="false">
-      <span></span><span></span><span></span>
-    </button>
-
-    <nav class="navigation" id="navigation">
-      <a href="#about">About</a>
-      <a href="#programs">Programs</a>
-      <a href="#rules">Trading rules</a>
-      <a href="#faq">FAQ</a>
-      <a href="/guide.html">Trader Guide</a>
-      <a class="nav-login" href="#contact">Contact</a>
-      <a class="nav-login" href="/app/">Trader login</a>
-      <a class="button button-small" href="#programs">Explore programs <span>↗</span></a>
-    </nav>
-  </header>
-
-  <main>
-    <section class="hero section-container" id="home">
-      <div class="hero-copy">
-        <div class="eyebrow"><span></span> THE NEXT GENERATION OF TRADING</div>
-        <h1>Trade with skill.<br><span>Grow with discipline.</span></h1>
-        <p class="hero-description">
-          A modern trading evaluation experience designed around
-          discipline, consistency and responsible risk management.
-        </p>
-        <div class="hero-actions">
-          <a class="button" href="#programs">Discover our programs <span>↗</span></a>
-          <a class="text-link" href="/app/">Trader portal →</a>
-          <a class="text-link" href="#about">Discover NEXFUND <span>→</span></a>
-        </div>
-        <div class="hero-note">
-          <span class="status-dot"></span>
-          Built for traders who take their process seriously.
-        </div>
-      </div>
-
-      <div class="hero-visual">
-        <div class="visual-glow"></div>
-        <div class="chart-card">
-          <div class="chart-top">
-            <div>
-              <span class="muted-label">MARKET OVERVIEW</span>
-              <h3>Trading performance</h3>
-            </div>
-            <span class="live-tag"><i></i> DEMO VISUAL</span>
-          </div>
-          <div class="chart-stats">
-            <div>
-              <span class="muted-label">DISCIPLINE</span>
-              <strong>First</strong>
-            </div>
-            <div>
-              <span class="muted-label">RISK</span>
-              <strong>Managed</strong>
-            </div>
-          </div>
-          <div class="chart">
-            <div class="chart-grid"></div>
-            <svg viewBox="0 0 500 190" preserveAspectRatio="none" role="img" aria-label="Illustrative upward trading chart">
-              <defs>
-                <linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stop-color="#a8f36b" stop-opacity=".28"/>
-                  <stop offset="100%" stop-color="#a8f36b" stop-opacity="0"/>
-                </linearGradient>
-              </defs>
-              <path class="chart-area" d="M0 155 L35 140 L70 148 L105 112 L140 125 L175 90 L210 105 L245 75 L280 91 L315 54 L350 69 L385 38 L420 51 L455 20 L500 28 L500 190 L0 190 Z"/>
-              <path class="chart-line" d="M0 155 L35 140 L70 148 L105 112 L140 125 L175 90 L210 105 L245 75 L280 91 L315 54 L350 69 L385 38 L420 51 L455 20 L500 28"/>
-            </svg>
-          </div>
-          <div class="chart-bottom">
-            <span>ILLUSTRATIVE GRAPH — NOT LIVE MARKET DATA</span>
-            <span>NEXFUND</span>
-          </div>
-        </div>
-        <div class="floating-label">
-          <span class="floating-icon">✳</span>
-          <div><strong>Think long term.</strong><small>Trade with a plan.</small></div>
-        </div>
-      </div>
-    </section>
-
-    <section class="trust-strip">
-      <div><span>01</span> Discipline-led approach</div>
-      <div><span>02</span> Transparent rule framework</div>
-      <div><span>03</span> Risk awareness</div>
-      <div><span>04</span> Trader-focused experience</div>
-    </section>
-
-    <section class="content-section section-container" id="about">
-      <div class="section-heading">
-        <div class="eyebrow"><span></span> WHY NEXFUND</div>
-        <h2>More than a trading challenge.</h2>
-        <p>We believe a trader's process matters as much as the result. NEXFUND is being built around clarity, consistency and responsible trading habits.</p>
-      </div>
-      <div class="feature-grid">
-        <article class="feature-card">
-          <span class="feature-number">01</span>
-          <div class="feature-icon">◈</div>
-          <h3>Clear framework</h3>
-          <p>Understand the evaluation structure and the rules that guide each stage.</p>
-        </article>
-        <article class="feature-card">
-          <span class="feature-number">02</span>
-          <div class="feature-icon">⌁</div>
-          <h3>Risk awareness</h3>
-          <p>Keep risk management at the centre of every trading decision.</p>
-        </article>
-        <article class="feature-card">
-          <span class="feature-number">03</span>
-          <div class="feature-icon">↗</div>
-          <h3>Performance focus</h3>
-          <p>Build consistency through a structured and measurable trading process.</p>
-        </article>
-      </div>
-    </section>
-
-    <section class="program-section" id="programs">
-      <div class="section-container">
-        <div class="section-heading centered">
-          <div class="eyebrow"><span></span> NEXFUND EVALUATION PROGRAMS</div>
-          <h2>Choose your capital.<br>Prove your consistency.</h2>
-          <p>Transparent evaluation concepts with defined targets and risk limits. These are preview terms—not active purchasable challenges.</p>
-        </div>
-        <div class="program-grid">
-          <article class="program-card"><span class="program-tier">STARTER</span><h3>$5,000</h3><p class="program-fee">Proposed fee <strong>$49</strong></p><ul><li>Profit target: 8%</li><li>Daily loss limit: 5%</li><li>Maximum loss: 10%</li><li>Minimum trading days: 5</li></ul><a class="button button-outline" href="/app/">Trader portal <span>→</span></a></article>
-          <article class="program-card featured"><span class="program-tier">POPULAR · CORE</span><h3>$10,000</h3><p class="program-fee">Proposed fee <strong>$89</strong></p><ul><li>Profit target: 8%</li><li>Daily loss limit: 5%</li><li>Maximum loss: 10%</li><li>Minimum trading days: 5</li></ul><a class="button" href="/app/">Trader portal <span>→</span></a></article>
-          <article class="program-card"><span class="program-tier">ADVANCED</span><h3>$25,000</h3><p class="program-fee">Proposed fee <strong>$189</strong></p><ul><li>Profit target: 8%</li><li>Daily loss limit: 5%</li><li>Maximum loss: 10%</li><li>Minimum trading days: 5</li></ul><a class="button button-outline" href="/app/">Trader portal <span>→</span></a></article>
-          <article class="program-card"><span class="program-tier">PRO</span><h3>$50,000</h3><p class="program-fee">Proposed fee <strong>$289</strong></p><ul><li>Profit target: 8%</li><li>Daily loss limit: 5%</li><li>Maximum loss: 10%</li><li>Minimum trading days: 5</li></ul><a class="button button-outline" href="/app/">Trader portal <span>→</span></a></article>
-        </div>
-        <p class="program-disclaimer">Program sizes, fees and rules are draft proposals. Checkout and challenge activation are not available yet.</p>
-      </div>
-    </section>
-
-    <section class="content-section section-container" id="rules">
-      <div class="rules-layout">
-        <div class="section-heading">
-          <div class="eyebrow"><span></span> TRADING STANDARDS</div>
-          <h2>Structure creates consistency.</h2>
-          <p>A professional evaluation needs understandable rules. The final limits and conditions will be displayed before any program becomes available.</p>
-        </div>
-        <div class="rules-list">
-          <div><span>01</span><p><strong>Daily drawdown</strong><small>Daily loss limits will be clearly defined.</small></p><b>→</b></div>
-          <div><span>02</span><p><strong>Maximum drawdown</strong><small>Overall risk boundaries will be disclosed.</small></p><b>→</b></div>
-          <div><span>03</span><p><strong>Profit target</strong><small>Targets will be specified for each program.</small></p><b>→</b></div>
-          <div><span>04</span><p><strong>Trading conditions</strong><small>Platform and trading conditions will be published.</small></p><b>→</b></div>
-        </div>
-      </div>
-    </section>
-
-    <section class="faq-section" id="faq">
-      <div class="section-container faq-layout">
-        <div class="section-heading">
-          <div class="eyebrow"><span></span> QUESTIONS</div>
-          <h2>Good questions.<br>Clear answers.</h2>
-          <p>More information will be added as the platform takes shape.</p>
-        </div>
-        <div class="faq-list">
-          <details>
-            <summary>What is NEXFUND? <span>+</span></summary>
-            <p>NEXFUND is being developed as a proprietary trading evaluation platform. It is not a retail brokerage service.</p>
-          </details>
-          <details>
-            <summary>Which trading platform will be supported? <span>+</span></summary>
-            <p>MetaTrader 5 is the planned trading platform. The live integration is not active yet.</p>
-          </details>
-          <details>
-            <summary>Are evaluation programs available now? <span>+</span></summary>
-            <p>No. Program details and availability will be announced once the platform and its operating requirements are ready.</p>
-          </details>
-          <details>
-            <summary>Can I create a trader account? <span>+</span></summary>
-            <p>Account registration is not active in this preview version. It will be introduced after the secure backend is implemented.</p>
-          </details>
-        </div>
-      </div>
-    </section>
-
-    <section class="contact-section section-container" id="contact">
-      <div class="contact-card">
-        <div>
-          <div class="eyebrow"><span></span> STAY CONNECTED</div>
-          <h2>The next step starts<br>with preparation.</h2>
-          <p>NEXFUND is under development. Follow the project as we prepare the platform and its evaluation framework.</p>
-        </div>
-        <a class="button" href="mailto:contact@nexfund.example">Contact the team <span>↗</span></a>
-      </div>
-    </section>
-  </main>
-
-  <footer class="site-footer">
-    <a class="brand" href="#home"><span class="brand-mark">N</span><span>NEX<span>FUND</span></span></a>
-    <p>© <span id="year"></span> NEXFUND. All rights reserved.</p>
-    <p class="footer-note">Preview website. No trading, funding or investment services are currently offered.</p>
-  </footer>
-</body>
-              </html>
-          
+<div class="announcement"><span class="pulse"></span> TRADING EVALUATION BUILT AROUND DISCIPLINE <a href="/guide.html">Read the trader guide ↗</a></div>
+<header class="site-header">
+<a class="brand" href="#home"><span class="brand-symbol">N<span>.</span></span><span>NEXFUND</span></a>
+<button class="menu-toggle" id="menuToggle" aria-label="Open navigation" aria-expanded="false"><i></i><i></i><i></i></button>
+<nav class="navigation" id="navigation"><a href="#programs">Challenges</a><a href="#how">How it works</a><a href="#rules">Trading rules</a><a href="#faq">FAQ</a><a href="/guide.html">Help center</a><a class="nav-login" href="/app/">Log in</a><a class="button button-small" href="#programs">Start evaluation <span>↗</span></a></nav>
+</header>
+<main>
+<section class="hero section-container" id="home">
+<div class="hero-copy"><div class="eyebrow"><span class="eyebrow-line"></span> YOUR SKILL. YOUR NEXT LEVEL.</div>
+<h1>Trade your plan.<br><em>Earn your place.</em></h1>
+<p class="hero-lead">A structured trading evaluation for traders who value process, risk control, and consistency. Make every decision count.</p>
+<div class="hero-buttons"><a class="button" href="#programs">Explore challenges <span>↗</span></a><a class="button secondary" href="/app/">Trader dashboard</a></div>
+<div class="hero-proof"><div class="proof-item"><span class="proof-icon">✓</span><span>Clear evaluation rules</span></div><div class="proof-item"><span class="proof-icon">✓</span><span>Risk-first framework</span></div></div></div>
+<div class="hero-art"><div class="art-grid"></div><div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div><div class="art-center"><div class="center-mark">N<span>F</span></div><small>TRADE WITH PURPOSE</small></div><div class="floating-chip chip-top"><span class="chip-dot"></span><div><small>YOUR PROCESS</small><strong>Stay consistent</strong></div></div><div class="floating-chip chip-bottom"><div class="chip-icon">⌁</div><div><small>RISK FRAMEWORK</small><strong>Defined. Measured. Managed.</strong></div></div><div class="art-caption">NEXFUND <span>01 / EVALUATION</span></div></div>
+</section>
+<div class="ticker"><div class="ticker-inner"><span>DISCIPLINE</span><b>✳</b><span>CONSISTENCY</span><b>✳</b><span>RISK CONTROL</span><b>✳</b><span>PERFORMANCE</span><b>✳</b><span>DISCIPLINE</span><b>✳</b><span>CONSISTENCY</span></div></div>
+<section class="section section-container" id="programs"><div class="section-top"><div><div class="eyebrow"><span class="eyebrow-line"></span> EVALUATION PROGRAMS</div><h2>Find your challenge.</h2><p class="section-lead">Choose an account size. Focus on the process. Build toward your next milestone.</p></div><a class="plain-link" href="/app/">View trader portal ↗</a></div>
+<div class="challenge-grid">
+<article class="challenge-card"><div class="challenge-head"><span class="challenge-label">01 / STARTER</span><span class="challenge-status">PREVIEW</span></div><h3>$5,000</h3><p class="account-label">Evaluation account</p><div class="challenge-price">$49 <small>proposed fee</small></div><div class="challenge-divider"></div><ul><li><span>Profit target</span><strong>8%</strong></li><li><span>Daily loss limit</span><strong>5%</strong></li><li><span>Max loss</span><strong>10%</strong></li><li><span>Min. trading days</span><strong>5</strong></li></ul><a class="button card-button" href="/app/">View details <span>→</span></a></article>
+<article class="challenge-card popular"><div class="popular-ribbon">TRADER FAVORITE</div><div class="challenge-head"><span class="challenge-label">02 / CORE</span><span class="challenge-status">PREVIEW</span></div><h3>$10,000</h3><p class="account-label">Evaluation account</p><div class="challenge-price">$89 <small>proposed fee</small></div><div class="challenge-divider"></div><ul><li><span>Profit target</span><strong>8%</strong></li><li><span>Daily loss limit</span><strong>5%</strong></li><li><span>Max loss</span><strong>10%</strong></li><li><span>Min. trading days</span><strong>5</strong></li></ul><a class="button card-button" href="/app/">View details <span>→</span></a></article>
+<article class="challenge-card"><div class="challenge-head"><span class="challenge-label">03 / ADVANCED</span><span class="challenge-status">PREVIEW</span></div><h3>$25,000</h3><p class="account-label">Evaluation account</p><div class="challenge-price">$189 <small>proposed fee</small></div><div class="challenge-divider"></div><ul><li><span>Profit target</span><strong>8%</strong></li><li><span>Daily loss limit</span><strong>5%</strong></li><li><span>Max loss</span><strong>10%</strong></li><li><span>Min. trading days</span><strong>5</strong></li></ul><a class="button card-button" href="/app/">View details <span>→</span></a></article>
+<article class="challenge-card"><div class="challenge-head"><span class="challenge-label">04 / PRO</span><span class="challenge-status">PREVIEW</span></div><h3>$50,000</h3><p class="account-label">Evaluation account</p><div class="challenge-price">$289 <small>proposed fee</small></div><div class="challenge-divider"></div><ul><li><span>Profit target</span><strong>8%</strong></li><li><span>Daily loss limit</span><strong>5%</strong></li><li><span>Max loss</span><strong>10%</strong></li><li><span>Min. trading days</span><strong>5</strong></li></ul><a class="button card-button" href="/app/">View details <span>→</span></a></article>
+</div><p class="catalog-note"><span>ⓘ</span> These are proposed program terms for preview only. Challenge purchases and account activation are not currently enabled.</p></section>
+<section class="dark-section"><div class="section-container section" id="how"><div class="section-top"><div><div class="eyebrow"><span class="eyebrow-line"></span> THE PROCESS</div><h2>Four steps. One focus.</h2><p class="section-lead">Know where you stand at every stage of your evaluation.</p></div></div><div class="steps-grid"><article class="step-card"><span>STEP 01</span><div class="step-icon">↗</div><h3>Select a challenge</h3><p>Choose the account size and evaluation structure that fit your approach.</p></article><article class="step-card"><span>STEP 02</span><div class="step-icon">⌖</div><h3>Trade the rules</h3><p>Follow your strategy while keeping the published risk limits in view.</p></article><article class="step-card"><span>STEP 03</span><div class="step-icon">▥</div><h3>Track progress</h3><p>Monitor performance, objectives, trading days, and account status.</p></article><article class="step-card"><span>STEP 04</span><div class="step-icon">✳</div><h3>Reach your milestone</h3><p>Eligible accounts can move to the next review stage once criteria are met.</p></article></div></div></section>
+<section class="section section-container" id="rules"><div class="section-top"><div><div class="eyebrow"><span class="eyebrow-line"></span> RISK MANAGEMENT</div><h2>Know the boundaries.</h2><p class="section-lead">An evaluation framework is only fair when its rules are visible, understandable, and consistently applied.</p></div></div><div class="rules-grid"><article><span class="rule-number">01</span><div><h3>Daily loss limit</h3><p>Know the maximum daily loss allowed and how the limit is calculated.</p></div><span class="rule-arrow">↗</span></article><article><span class="rule-number">02</span><div><h3>Maximum drawdown</h3><p>Understand the overall account loss threshold and monitoring basis.</p></div><span class="rule-arrow">↗</span></article><article><span class="rule-number">03</span><div><h3>Profit objectives</h3><p>Review the target and required trading activity for your chosen stage.</p></div><span class="rule-arrow">↗</span></article><article><span class="rule-number">04</span><div><h3>Trading conditions</h3><p>Check the platform, instruments, and any restricted trading behavior.</p></div><span class="rule-arrow">↗</span></article></div></section>
+<section class="dark-section"><section class="section section-container" id="platform"><div class="platform-layout"><div class="platform-copy"><div class="eyebrow"><span class="eyebrow-line"></span> TRADER WORKSPACE</div><h2>Your progress.<br>In one place.</h2><p class="section-lead">A trader dashboard designed to keep the important information close: evaluation status, account metrics, requests, and support.</p><a class="button" href="/app/">Open trader portal <span>↗</span></a></div><div class="dashboard-preview"><div class="preview-bar"><div class="preview-brand"><span>N.</span> NEXFUND</div><span class="preview-live">ACCOUNT PREVIEW</span></div><div class="preview-body"><div class="preview-title">Account overview <small>Evaluation workspace</small></div><div class="preview-metrics"><div><small>ACCOUNT BALANCE</small><strong>$10,000</strong><span class="preview-muted">Illustrative</span></div><div><small>PROFIT TARGET</small><strong>8.0%</strong><span class="preview-muted">Program example</span></div></div><div class="preview-progress"><div class="progress-label"><span>Evaluation progress</span><b>Preview</b></div><div class="progress-track"><span></span></div><small>Actual metrics appear when a valid account is connected.</small></div><div class="preview-row"><span>Daily loss limit</span><b>Defined by program</b></div><div class="preview-row"><span>Maximum drawdown</span><b>Defined by program</b></div><div class="preview-row"><span>Trading status</span><b class="preview-status">Awaiting activation</b></div></div></div></div></section>
+<section class="section section-container" id="faq"><div class="faq-layout"><div><div class="eyebrow"><span class="eyebrow-line"></span> NEED TO KNOW</div><h2>Questions,<br>answered.</h2><p class="section-lead">The basics of the NEXFUND evaluation.</p><a class="plain-link" href="/guide.html">Open trader guide ↗</a></div><div class="faq-list"><details><summary>What is NEXFUND?<span>+</span></summary><p>NEXFUND is being developed as a trading evaluation platform with structured challenges and risk criteria.</p></details><details><summary>Are challenges available to purchase?<span>+</span></summary><p>Not yet. The listed account sizes and fees are previews; checkout and account activation are not enabled.</p></details><details><summary>Which trading platform will be supported?<span>+</span></summary><p>MetaTrader 5 is planned. A live MT5 connection and account provisioning have not been confirmed active.</p></details><details><summary>How can I track my evaluation?<span>+</span></summary><p>Use the trader portal to explore the workspace. Live evaluation data requires an active account and backend integration.</p></details><details><summary>Where can I get help?<span>+</span></summary><p>Visit the trader guide or open the support area through the trader portal.</p></details></div></div></section>
+<section class="closing section-container"><div class="closing-card"><div><div class="eyebrow"><span class="eyebrow-line"></span> BUILT FOR THE PROCESS</div><h2>Make your next move<br><em>count.</em></h2><p>Explore NEXFUND and prepare for the evaluation journey.</p></div><a class="button" href="/app/">Enter trader portal <span>↗</span></a><div class="closing-decoration">N</div></div></section>
+</main>
+<footer class="footer section-container"><a class="brand" href="#home"><span class="brand-symbol">N<span>.</span></span><span>NEXFUND</span></a><div class="footer-links"><a href="/guide.html">Trader guide</a><a href="/app/">Portal</a><a href="/app/support.html">Support</a><a href="#rules">Rules</a></div><p>© <span id="year"></span> NEXFUND. All rights reserved.</p><small>Preview platform. No trading or funding services are currently offered.</small></footer>
+</body></html>
