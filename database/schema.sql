@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS challenges (
   high_watermark REAL NOT NULL,
   daily_start_equity REAL NOT NULL,
   daily_start_date TEXT NOT NULL,
+  rules_snapshot_json TEXT NOT NULL DEFAULT '{}',
   trading_days_count INTEGER NOT NULL DEFAULT 0 CHECK (trading_days_count >= 0),
   last_provider_snapshot_at TEXT,
   started_at TEXT,
