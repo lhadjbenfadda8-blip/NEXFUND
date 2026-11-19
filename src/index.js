@@ -450,7 +450,7 @@ export default {
         const mail=await sendMT5CredentialsEmail(env,challenge,{account_login:login,server_name:server},delivery);
         return json({ok:mail.ok,provisioned:true,email_status:mail.ok?'sent':'failed',login,server,message:mail.ok?'MT5 account provisioned and credentials email sent.':'Account created, but email failed. Retry after fixing email configuration.'},mail.ok?201:502);
       }
-      const cancelChallengeMatch = url.pathname.match(/^\\/api\\/admin\\/challenges\\/([a-f0-9-]+)\\/cancel$/i);
+      const cancelChallengeMatch = url.pathname.match(/^\/api\/admin\/challenges\/([a-f0-9-]+)\/cancel$/i);
       if (cancelChallengeMatch && request.method === "POST") {
         const denied = requireAdmin(session); if (denied) return denied;
         const challengeId = cancelChallengeMatch[1];
