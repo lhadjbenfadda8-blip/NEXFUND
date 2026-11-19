@@ -68,8 +68,8 @@ async function ensureCryptoPayments(db) {
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_crypto_payments_status ON crypto_payments(status)").run();
 }
 
-const DEFAULT_TRC20_RECEIVING_ADDRESS = "TCgnNJivezDYXMPngcffwDGKNt3tFrfN1z";
-const getReceivingAddress = env => env.USDT_TRC20_ADDRESS || DEFAULT_TRC20_RECEIVING_ADDRESS;
+// Never fall back to a hard-coded wallet. Configure USDT_TRC20_ADDRESS as a secret/env var.
+const getReceivingAddress = env => String(env.USDT_TRC20_ADDRESS || "").trim();
 
 const id = () => crypto.randomUUID();
 const rateLimited = (result) => json({ error: "Too many attempts. Please wait before trying again." }, 429, { "Retry-After": String(result.retryAfter) });
