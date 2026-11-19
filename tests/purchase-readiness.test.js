@@ -4,7 +4,7 @@ import { isProvisioningConfigured, isPurchaseEnabled } from "../src/purchase-rea
 
 const readyEnv={
   PAYMENTS_ENABLED:"true",
-  USDT_TRC20_ADDRESS:"TReadinessFixtureAddress",
+  USDT_TRC20_ADDRESS:"TCgnNJivezDYXMPngcffwDGKNt3tFrfN1z",
   MT5_PROVIDER_API_URL:"https://provider.example/api/accounts",
   MT5_PROVIDER_API_KEY:"provider-key",
   RESEND_API_KEY:"resend-key",
@@ -24,6 +24,7 @@ test("purchases require payment flag and all HTTPS provider/email/key settings",
 
 test("purchase readiness requires a configured receiving wallet",()=>{
   assert.equal(isPurchaseEnabled({...readyEnv,USDT_TRC20_ADDRESS:""}),false);
+  assert.equal(isPurchaseEnabled({...readyEnv,USDT_TRC20_ADDRESS:"T123"}),false);
 });
 
 test("encryption key validation works without Node-specific Buffer or atob globals",()=>{
