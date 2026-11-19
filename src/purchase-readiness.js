@@ -15,7 +15,7 @@ export function getPurchaseReadiness(env = {}) {
   const encryptionKeyValid = isBase64Encoded32ByteKey(env.CREDENTIALS_ENCRYPTION_KEY);
   return {
     paymentsEnabled: env.PAYMENTS_ENABLED === "true",
-    receivingAddressConfigured: Boolean(String(env.USDT_TRC20_ADDRESS || "").trim()),
+    receivingAddressConfigured: /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(String(env.USDT_TRC20_ADDRESS || "").trim()),
     providerUrlValid,
     providerApiKeyConfigured: Boolean(env.MT5_PROVIDER_API_KEY),
     encryptionKeyValid,
