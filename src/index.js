@@ -294,10 +294,17 @@ export default {
         const payout=await env.DB.prepare("SELECT id,user_id,status,requested_amount_usd FROM payout_requests WHERE id=?").bind(payoutId).first();
         if(!payout)return json({error:"Payout request not found."},404);
         if(!isAllowedPayoutTransition(payout.status,status))return json({error:"Invalid payout status transition."},409);
+        if(status==="paid"){
+          const duplicateTx=await env.DB.prepare("SELECT id FROM payout_requests WHERE tx_reference=? AND id<>? LIMIT 1").bind(tx,payoutId).first();
+          if(duplicateTx)return json({error:"This transaction reference is already assigned to another payout."},409);
+        }
+        // Compare-and-set prevents two admins from processing the same payout transition concurrently.
+        const changed=await env.DB.prepare("UPDATE payout_requests SET status=?,admin_note=?,tx_reference=?,reviewed_by=?,updated_at=datetime('now') WHERE id=? AND status=?")
+          .bind(status,note,tx||null,session.user_id,payoutId,payout.status).run();
+        if(Number(changed.meta?.changes||0)!==1)return json({error:"Payout was updated by another administrator. Refresh and review its current status."},409);
         await env.DB.batch([
-          env.DB.prepare("UPDATE payout_requests SET status=?,admin_note=?,tx_reference=?,reviewed_by=?,updated_at=datetime('now') WHERE id=?").bind(status,note,tx||null,session.user_id,payoutId),
           env.DB.prepare("INSERT INTO notifications(id,user_id,title,body) VALUES(?,?,?,?)").bind(id(),payout.user_id,"تحديث طلب الأرباح","تم تحديث حالة طلب الأرباح إلى "+status+(note?" — "+note:"")+(tx?" — مرجع الدفع: "+tx:"")),
-          env.DB.prepare("INSERT INTO audit_logs(id,actor_user_id,action,target_type,target_id,details_json) VALUES(?,?,?,'payout_request',?,?)").bind(id(),session.user_id,"payout."+status,payoutId,JSON.stringify({amount_usd:payout.requested_amount_usd,note,tx_reference:tx}))
+          env.DB.prepare("INSERT INTO audit_logs(id,actor_user_id,action,target_type,target_id,details_json) VALUES(?,?,?,'payout_request',?,?)").bind(id(),session.user_id,"payout."+status,payoutId,JSON.stringify({amount_usd:payout.requested_amount_usd,previous_status:payout.status,new_status:status,note,tx_reference:tx,changed_at:now()}))
         ]);
         return json({ok:true,status});
       }
