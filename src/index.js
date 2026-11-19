@@ -407,7 +407,8 @@ export default {
         const platform = String(body.platform || "");
         if (platform !== "MT5") return json({ error: "Currently only MetaTrader 5 (MT5) is supported." }, 400);
         await ensureDefaultPrograms(env.DB);
-        const program = await env.DB.prepare("SELECT id,account_size_usd,fee_usd FROM evaluation_programs WHERE id=? AND status='active'").bind(programId).first();
+        await ensureChallengeSnapshotSchema(env.DB);
+        const program = await env.DB.prepare("SELECT id,account_size_usd,fee_usd,profit_target_pct,daily_drawdown_pct,max_drawdown_pct,min_trading_days,max_trading_days,rules_json FROM evaluation_programs WHERE id=? AND status='active'").bind(programId).first();
         if (!program) return json({ error: "The selected evaluation program is unavailable." }, 404);
         const existing = await env.DB.prepare(
           "SELECT c.id AS challenge_id,p.id AS payment_id,p.amount_usdt,p.status AS payment_status FROM challenges c JOIN crypto_payments p ON p.challenge_id=c.id WHERE c.user_id=? AND c.program_id=? AND c.status='pending' AND p.status='pending' ORDER BY c.created_at DESC LIMIT 1"
@@ -420,8 +421,8 @@ export default {
         const today = new Date().toISOString().slice(0,10);
         const paymentId = id();
         await env.DB.batch([
-          env.DB.prepare("INSERT INTO challenges (id,user_id,program_id,status,initial_balance,current_balance,equity,high_watermark,daily_start_equity,daily_start_date) VALUES (?,?,?,'pending',?,?,?,?,?,?)")
-            .bind(challengeId, session.user_id, program.id, balance, balance, balance, balance, balance, today),
+          env.DB.prepare("INSERT INTO challenges (id,user_id,program_id,status,initial_balance,current_balance,equity,high_watermark,daily_start_equity,daily_start_date,rules_snapshot_json) VALUES (?,?,?,'pending',?,?,?,?,?,?,?)")
+            .bind(challengeId, session.user_id, program.id, balance, balance, balance, balance, balance, today, JSON.stringify(snapshotChallengeRules(program))),
           env.DB.prepare("INSERT INTO trading_accounts (id,challenge_id,platform,integration_mode,connection_status) VALUES (?,?,?,'demo','not_connected')")
             .bind(id(), challengeId, platform),
           env.DB.prepare("INSERT INTO audit_logs (id,actor_user_id,action,target_type,target_id,details_json) VALUES (?,?,?,'challenge',?,?)")
