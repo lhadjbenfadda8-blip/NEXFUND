@@ -274,6 +274,22 @@ export default {
         return json({ ok:true, generated_at:now(), traders:users, challenges, payments, payouts, recent_challenges:recentChallenges.results||[] });
       }
 
+      if (url.pathname === "/api/admin/audit-logs" && request.method === "GET") {
+        const denied=requireAdmin(session);if(denied)return denied;
+        const limit=Math.min(100,Math.max(1,Number.parseInt(url.searchParams.get("limit")||"50",10)||50));
+        const offset=Math.min(10000,Math.max(0,Number.parseInt(url.searchParams.get("offset")||"0",10)||0));
+        const action=String(url.searchParams.get("action")||"").trim().slice(0,80);
+        const targetType=String(url.searchParams.get("target_type")||"").trim().slice(0,60);
+        const clauses=[],params=[];
+        if(action){clauses.push("a.action LIKE ?");params.push("%"+action+"%");}
+        if(targetType){clauses.push("a.target_type=?");params.push(targetType);}
+        const where=clauses.length?" WHERE "+clauses.join(" AND "):"";
+        const rows=await env.DB.prepare("SELECT a.id,a.action,a.target_type,a.target_id,a.details_json,a.created_at,u.email AS actor_email FROM audit_logs a LEFT JOIN users u ON u.id=a.actor_user_id"+where+" ORDER BY a.created_at DESC LIMIT ? OFFSET ?")
+          .bind(...params,limit,offset).all();
+        const total=await env.DB.prepare("SELECT COUNT(*) AS total FROM audit_logs a"+where).bind(...params).first();
+        return json({logs:rows.results||[],total:Number(total?.total||0),limit,offset,generated_at:now()});
+      }
+
       if (url.pathname === "/api/admin/payouts" && request.method === "GET") {
         const denied=requireAdmin(session);if(denied)return denied;
         await ensurePayoutTables(env.DB);
