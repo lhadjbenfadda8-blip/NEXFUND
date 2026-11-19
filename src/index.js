@@ -134,7 +134,7 @@ export default {
           return json({ error: "Snapshot fields are invalid." }, 400);
         }
         const challenge = await env.DB.prepare(
-          "SELECT c.id,c.user_id,c.status,c.initial_balance,c.current_balance,c.equity,c.high_watermark,c.daily_start_equity,c.daily_start_date,c.trading_days_count,c.last_provider_snapshot_at,p.profit_target_pct,p.daily_drawdown_pct,p.max_drawdown_pct,p.min_trading_days,p.rules_json,t.account_login FROM challenges c JOIN evaluation_programs p ON p.id=c.program_id JOIN trading_accounts t ON t.challenge_id=c.id WHERE c.id=?"
+          "SELECT c.id,c.user_id,c.status,c.initial_balance,c.current_balance,c.equity,c.high_watermark,c.daily_start_equity,c.daily_start_date,c.trading_days_count,c.last_provider_snapshot_at,p.profit_target_pct,p.daily_drawdown_pct,p.max_drawdown_pct,p.min_trading_days,p.max_trading_days,p.rules_json,t.account_login FROM challenges c JOIN evaluation_programs p ON p.id=c.program_id JOIN trading_accounts t ON t.challenge_id=c.id WHERE c.id=?"
         ).bind(challengeId).first();
         if (!challenge) return json({ error: "Challenge/account mapping not found." }, 404);
         if (challenge.status !== "active") return json({ error: "Only active challenges accept provider snapshots." }, 409);
@@ -153,6 +153,7 @@ export default {
           maxDrawdownPct: Number(challenge.max_drawdown_pct),
           profitTargetPct: Number(challenge.profit_target_pct),
           minTradingDays: Number(challenge.min_trading_days),
+          maxTradingDays: challenge.max_trading_days == null ? undefined : Number(challenge.max_trading_days),
           trailingDrawdownPct: (() => { try { const parsed = JSON.parse(challenge.rules_json || '{}'); return parsed.trailing_drawdown_pct == null ? undefined : Number(parsed.trailing_drawdown_pct); } catch { return undefined; } })()
         });
         const nextStatus = evaluation.status;
