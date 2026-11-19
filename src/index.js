@@ -286,6 +286,83 @@ export default {
         return json({ account, created: true, mode: "paper" },201);
       }
 
+      // Paper simulator position lifecycle: open, mark and close virtual positions.
+      if (url.pathname === "/api/simulator/positions" && request.method === "GET") {
+        await ensureSimulatorTables(env.DB);
+        const positions = await env.DB.prepare("SELECT id,symbol,side,quantity,entry_price,current_price,stop_loss,take_profit,unrealized_pnl,status,opened_at,closed_at FROM simulator_positions WHERE user_id=? ORDER BY opened_at DESC LIMIT 100").bind(session.user_id).all();
+        return json({ positions: positions.results, mode: "paper" });
+      }
+
+      if (url.pathname === "/api/simulator/positions" && request.method === "POST") {
+        await ensureSimulatorTables(env.DB);
+        const body=await request.json().catch(()=>null);
+        if(!body) return json({error:"Invalid JSON body."},400);
+        const symbol=String(body.symbol||"").trim().toUpperCase(), side=String(body.side||"").toLowerCase();
+        const quantity=Number(body.quantity), entry=Number(body.entry_price), stop=body.stop_loss==null?null:Number(body.stop_loss), target=body.take_profit==null?null:Number(body.take_profit);
+        if(!/^[A-Z0-9._-]{2,20}$/.test(symbol)||!["buy","sell"].includes(side)||!Number.isFinite(quantity)||quantity<=0||quantity>100000||!Number.isFinite(entry)||entry<=0||(stop!==null&&(!Number.isFinite(stop)||stop<=0))||(target!==null&&(!Number.isFinite(target)||target<=0))) return json({error:"Invalid position parameters."},400);
+        if(side==="buy"&&((stop!==null&&stop>=entry)||(target!==null&&target<=entry))) return json({error:"For BUY, stop loss must be below entry and take profit above entry."},400);
+        if(side==="sell"&&((stop!==null&&stop<=entry)||(target!==null&&target>=entry))) return json({error:"For SELL, stop loss must be above entry and take profit below entry."},400);
+        const account=await env.DB.prepare("SELECT id,balance FROM simulator_accounts WHERE user_id=?").bind(session.user_id).first();
+        if(!account) return json({error:"Create your paper account first."},404);
+        const exposure=quantity*entry;
+        if(!Number.isFinite(exposure)||exposure>Number(account.balance)*20) return json({error:"Position size exceeds the simulator's 20x notional exposure limit."},400);
+        const positionId=id();
+        await env.DB.prepare("INSERT INTO simulator_positions(id,user_id,account_id,symbol,side,quantity,entry_price,current_price,stop_loss,take_profit,unrealized_pnl,status) VALUES(?,?,?,?,?,?,?,?,?,?,0,'open')").bind(positionId,session.user_id,account.id,symbol,side,quantity,entry,entry,stop,target).run();
+        await env.DB.prepare("INSERT INTO audit_logs(id,actor_user_id,action,target_type,target_id,details_json) VALUES(?,?,?,'simulator_position',?,?)").bind(id(),session.user_id,"simulator.position_opened",positionId,JSON.stringify({symbol,side,quantity,entry_price:entry,stop_loss:stop,take_profit:target})).run();
+        return json({ok:true,position:{id:positionId,symbol,side,quantity,entry_price:entry,current_price:entry,stop_loss:stop,take_profit:target,unrealized_pnl:0,status:"open"}},201);
+      }
+
+      const markMatch=url.pathname.match(/^\/api\/simulator\/positions\/([a-f0-9-]+)\/mark$/i);
+      if(markMatch&&request.method==="POST"){
+        await ensureSimulatorTables(env.DB);
+        const body=await request.json().catch(()=>null), price=Number(body?.current_price);
+        if(!Number.isFinite(price)||price<=0) return json({error:"current_price must be a positive number."},400);
+        const pos=await env.DB.prepare("SELECT id,side,quantity,entry_price,stop_loss,take_profit,status FROM simulator_positions WHERE id=? AND user_id=?").bind(markMatch[1],session.user_id).first();
+        if(!pos) return json({error:"Position not found."},404);
+        if(pos.status!=="open") return json({error:"Only open positions can be marked."},409);
+        const pnl=(pos.side==="buy"?price-Number(pos.entry_price):Number(pos.entry_price)-price)*Number(pos.quantity);
+        const hitStop=pos.stop_loss!==null&&(pos.side==="buy"?price<=Number(pos.stop_loss):price>=Number(pos.stop_loss));
+        const hitTarget=pos.take_profit!==null&&(pos.side==="buy"?price>=Number(pos.take_profit):price<=Number(pos.take_profit));
+        if(hitStop||hitTarget){
+          const finalPrice=hitStop?Number(pos.stop_loss):Number(pos.take_profit);
+          const finalPnl=(pos.side==="buy"?finalPrice-Number(pos.entry_price):Number(pos.entry_price)-finalPrice)*Number(pos.quantity);
+          const account=await env.DB.prepare("SELECT balance FROM simulator_accounts WHERE id IN (SELECT account_id FROM simulator_positions WHERE id=? AND user_id=?)").bind(pos.id,session.user_id).first();
+          const newBalance=Number(account.balance)+finalPnl;
+          await env.DB.batch([
+            env.DB.prepare("UPDATE simulator_positions SET current_price=?,unrealized_pnl=0,status='closed',closed_at=datetime('now'),exit_price=?,realized_pnl=?,close_reason=? WHERE id=? AND user_id=? AND status='open'").bind(finalPrice,finalPrice,finalPnl,hitStop?"stop_loss":"take_profit",pos.id,session.user_id),
+            env.DB.prepare("UPDATE simulator_accounts SET balance=?,equity=?,updated_at=datetime('now') WHERE id IN (SELECT account_id FROM simulator_positions WHERE id=? AND user_id=?)").bind(newBalance,newBalance,pos.id,session.user_id),
+            env.DB.prepare("INSERT INTO simulator_trades(id,user_id,account_id,symbol,side,quantity,entry_price,exit_price,pnl,status,closed_at) SELECT ?,user_id,account_id,symbol,side,quantity,entry_price,?,?, 'closed',datetime('now') FROM simulator_positions WHERE id=? AND user_id=?").bind(id(),finalPrice,finalPnl,pos.id,session.user_id)
+          ]);
+          return json({ok:true,auto_closed:true,reason:hitStop?"stop_loss":"take_profit",exit_price:finalPrice,realized_pnl:finalPnl});
+        }
+        await env.DB.prepare("UPDATE simulator_positions SET current_price=?,unrealized_pnl=? WHERE id=? AND user_id=? AND status='open'").bind(price,pnl,pos.id,session.user_id).run();
+        const open=await env.DB.prepare("SELECT id,symbol,side,quantity,entry_price,current_price,stop_loss,take_profit,unrealized_pnl,status FROM simulator_positions WHERE id=? AND user_id=?").bind(pos.id,session.user_id).first();
+        const sum=await env.DB.prepare("SELECT COALESCE(SUM(unrealized_pnl),0) AS total FROM simulator_positions WHERE user_id=? AND status='open'").bind(session.user_id).first();
+        const account=await env.DB.prepare("SELECT balance FROM simulator_accounts WHERE user_id=?").bind(session.user_id).first();
+        return json({ok:true,position:open,account:{balance:Number(account.balance),equity:Number(account.balance)+Number(sum.total)}});
+      }
+
+      const closeMatch=url.pathname.match(/^\/api\/simulator\/positions\/([a-f0-9-]+)\/close$/i);
+      if(closeMatch&&request.method==="POST"){
+        await ensureSimulatorTables(env.DB);
+        const body=await request.json().catch(()=>({}));
+        const closePrice=Number(body?.exit_price);
+        if(!Number.isFinite(closePrice)||closePrice<=0) return json({error:"exit_price must be a positive number."},400);
+        const pos=await env.DB.prepare("SELECT id,account_id,symbol,side,quantity,entry_price,status FROM simulator_positions WHERE id=? AND user_id=?").bind(closeMatch[1],session.user_id).first();
+        if(!pos) return json({error:"Position not found."},404);
+        if(pos.status!=="open") return json({error:"Position is already closed."},409);
+        const pnl=(pos.side==="buy"?closePrice-Number(pos.entry_price):Number(pos.entry_price)-closePrice)*Number(pos.quantity);
+        const account=await env.DB.prepare("SELECT balance FROM simulator_accounts WHERE id=? AND user_id=?").bind(pos.account_id,session.user_id).first();
+        const newBalance=Number(account.balance)+pnl;
+        await env.DB.batch([
+          env.DB.prepare("UPDATE simulator_positions SET current_price=?,unrealized_pnl=0,status='closed',closed_at=datetime('now'),exit_price=?,realized_pnl=?,close_reason='manual' WHERE id=? AND user_id=? AND status='open'").bind(closePrice,closePrice,pnl,pos.id,session.user_id),
+          env.DB.prepare("UPDATE simulator_accounts SET balance=?,equity=?,updated_at=datetime('now') WHERE id=? AND user_id=?").bind(newBalance,newBalance,pos.account_id,session.user_id),
+          env.DB.prepare("INSERT INTO simulator_trades(id,user_id,account_id,symbol,side,quantity,entry_price,exit_price,pnl,status,closed_at) VALUES(?,?,?,?,?,?,?,?,?,'closed',datetime('now'))").bind(id(),session.user_id,pos.account_id,pos.symbol,pos.side,pos.quantity,pos.entry_price,closePrice,pnl),
+          env.DB.prepare("INSERT INTO audit_logs(id,actor_user_id,action,target_type,target_id,details_json) VALUES(?,?,?,'simulator_position',?,?)").bind(id(),session.user_id,"simulator.position_closed",pos.id,JSON.stringify({exit_price:closePrice,pnl}))
+        ]);
+        return json({ok:true,position_id:pos.id,exit_price:closePrice,realized_pnl:pnl,account:{balance:newBalance,equity:newBalance}});
+      }
+
       if (url.pathname === "/api/simulator/trades" && request.method === "POST") {
         await ensureSimulatorTables(env.DB);
         const body=await request.json().catch(()=>null);
@@ -551,4 +628,15 @@ async function ensureSimulatorTables(db) {
     pnl REAL NOT NULL, status TEXT NOT NULL DEFAULT 'closed', created_at TEXT NOT NULL DEFAULT (datetime('now')), closed_at TEXT
   )`).run();
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_sim_trades_user ON simulator_trades(user_id,created_at)").run();
+  await db.prepare(`CREATE TABLE IF NOT EXISTS simulator_positions (
+    id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    account_id TEXT NOT NULL REFERENCES simulator_accounts(id) ON DELETE CASCADE,
+    symbol TEXT NOT NULL, side TEXT NOT NULL CHECK(side IN ('buy','sell')), quantity REAL NOT NULL CHECK(quantity>0),
+    entry_price REAL NOT NULL CHECK(entry_price>0), current_price REAL NOT NULL CHECK(current_price>0),
+    stop_loss REAL, take_profit REAL, unrealized_pnl REAL NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','closed')),
+    exit_price REAL, realized_pnl REAL, close_reason TEXT,
+    opened_at TEXT NOT NULL DEFAULT (datetime('now')), closed_at TEXT
+  )`).run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_sim_positions_user_status ON simulator_positions(user_id,status,opened_at)").run();
 }
