@@ -62,3 +62,19 @@ button,a,input,select,textarea{transition:background-color .18s,border-color .18
 .payment-pending{color:#f2c56e;border-color:#7c6737}.payment-paid{color:var(--accent);border-color:rgba(53,208,232,.4)}.payment-expired,.payment-rejected{color:#f49a9a;border-color:#704343}
 .payment-history-meta{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:10px}
 .payment-history-tx{direction:ltr;text-align:left;overflow-wrap:anywhere;color:var(--muted);font:12px monospace;margin-top:10px}
+
+/* Purchase readiness: explicit, mobile-first deployment diagnostics */
+.purchase-readiness{margin:14px 0 20px;padding:18px;border:1px solid rgba(245,181,88,.28);border-radius:14px;background:linear-gradient(145deg,rgba(55,39,22,.28),rgba(12,22,35,.88));}
+.readiness-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.readiness-head strong{font-size:15px;color:var(--text)}
+.readiness-state{padding:5px 11px;border-radius:20px;font-size:11px;font-weight:700}
+.readiness-state.blocked{color:#ffd18c;border:1px solid rgba(245,181,88,.35);background:rgba(245,181,88,.08)}
+.readiness-state.ready{color:#8ee7c0;border:1px solid rgba(90,211,157,.35);background:rgba(90,211,157,.08)}
+.purchase-readiness p{margin:8px 0 12px;color:var(--muted);font-size:13px}
+.purchase-readiness ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.purchase-readiness li{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid var(--line);border-radius:9px;background:rgba(7,16,29,.48);font-size:12px;color:#c9d6e4;min-width:0}
+.purchase-readiness li b{margin-inline-start:auto;white-space:nowrap;font-size:11px;color:#ffd18c}
+.readiness-dot{width:8px;height:8px;border-radius:50%;flex:0 0 8px}
+.readiness-dot.ok{background:#5ad39d;box-shadow:0 0 10px rgba(90,211,157,.35)}
+.readiness-dot.missing{background:#f2b45b;box-shadow:0 0 10px rgba(242,180,91,.25)}
+@media(max-width:560px){.purchase-readiness{padding:14px}.purchase-readiness ul{grid-template-columns:1fr}.purchase-readiness li{font-size:12px}}
