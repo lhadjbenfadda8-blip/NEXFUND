@@ -43,19 +43,24 @@ $("saveProgram").addEventListener("click",async()=>{
  finally{btn.disabled=false;}
 });
 const dateFmt=v=>v?new Date(v).toLocaleString():"—";
-async function loadChallenges(){
- const status=$("challengeStatusFilter").value;
- const data=await api("/api/admin/challenges");
- const allChallenges=data.challenges||[];
- updateKpi("kpiActive",allChallenges.filter(c=>c.status==="active").length);
- updateKpi("kpiPending",allChallenges.filter(c=>c.status==="pending").length);
- updateKpi("kpiPassed",allChallenges.filter(c=>c.status==="passed").length);
- updateKpi("kpiFailed",allChallenges.filter(c=>c.status==="failed").length);
- const challenges=status?allChallenges.filter(c=>c.status===status):allChallenges;
+let cachedChallenges=[];
+function renderChallenges(){
+ const status=$("challengeStatusFilter").value,query=($("challengeSearch")?.value||"").trim().toLowerCase();
+ const filtered=cachedChallenges.filter(c=>(!status||c.status===status)&&(!query||String(c.email||"").toLowerCase().includes(query)||String(c.id||"").toLowerCase().includes(query)||String(c.program_name||"").toLowerCase().includes(query)||String(c.account_login||"").toLowerCase().includes(query)));
+ const count=$("challengesSearchSummary");if(count)count.textContent="إجمالي التحديات: "+cachedChallenges.length+" · النتائج: "+filtered.length;
  const money2=v=>new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:2}).format(Number(v||0));
- $("challengesList").innerHTML=challenges.length?challenges.map(c=>'<article class="program-card"><h3>'+esc(c.program_name)+' · '+esc(c.status)+'</h3><p>العميل: <b>'+esc(c.email)+'</b></p><p>Challenge ID: <code>'+esc(c.id)+'</code></p><div class="program-stats"><span>Initial balance<b>'+money2(c.initial_balance)+'</b></span><span>Balance<b>'+money2(c.current_balance)+'</b></span><span>Equity<b>'+money2(c.equity)+'</b></span><span>High watermark<b>'+money2(c.high_watermark)+'</b></span><span>Daily start equity<b>'+money2(c.daily_start_equity)+'</b></span><span>Target<b>'+esc(c.profit_target_pct)+'%</b></span><span>Daily limit<b>'+esc(c.daily_drawdown_pct)+'%</b></span><span>Trading days<b>'+esc(c.trading_days_count||0)+' / '+esc(c.max_trading_days??'∞')+'</b></span><span>Minimum days<b>'+esc(c.min_trading_days??0)+'</b></span><span>Max loss<b>'+esc(c.max_drawdown_pct)+'%</b></span></div><p>Account: '+esc(c.account_login||"غير مُجهز")+' · '+esc(c.server_name||"—")+'</p><p>Platform: '+esc(c.platform||"MT5")+' · Mode: '+esc(c.integration_mode||"—")+' · Connection: '+esc(c.connection_status||"—")+'</p><p>Last sync: '+esc(dateFmt(c.last_sync_at))+' · Started: '+esc(dateFmt(c.started_at))+'</p>'+(c.failure_reason?'<p class="message">Failure reason: '+esc(c.failure_reason)+'</p>':'')+(c.status==='active'||c.status==='pending'?'<button class="secondary cancel-challenge" data-id="'+esc(c.id)+'">إلغاء التحدي</button>':'')+'</article>').join(""):'<p class="empty">لا توجد تحديات بهذه الحالة.</p>';
+ $("challengesList").innerHTML=filtered.length?filtered.map(c=>'<article class="program-card"><h3>'+esc(c.program_name)+' · '+esc(c.status)+'</h3><p>العميل: <b>'+esc(c.email)+'</b></p><p>Challenge ID: <code>'+esc(c.id)+'</code></p><div class="program-stats"><span>Initial balance<b>'+money2(c.initial_balance)+'</b></span><span>Balance<b>'+money2(c.current_balance)+'</b></span><span>Equity<b>'+money2(c.equity)+'</b></span><span>High watermark<b>'+money2(c.high_watermark)+'</b></span><span>Daily start equity<b>'+money2(c.daily_start_equity)+'</b></span><span>Target<b>'+esc(c.profit_target_pct)+'%</b></span><span>Daily limit<b>'+esc(c.daily_drawdown_pct)+'%</b></span><span>Trading days<b>'+esc(c.trading_days_count||0)+' / '+esc(c.max_trading_days??'∞')+'</b></span><span>Minimum days<b>'+esc(c.min_trading_days??0)+'</b></span><span>Max loss<b>'+esc(c.max_drawdown_pct)+'%</b></span></div><p>Account: '+esc(c.account_login||"غير مُجهز")+' · '+esc(c.server_name||"—")+'</p><p>Platform: '+esc(c.platform||"MT5")+' · Mode: '+esc(c.integration_mode||"—")+' · Connection: '+esc(c.connection_status||"—")+'</p><p>Last sync: '+esc(dateFmt(c.last_sync_at))+' · Started: '+esc(dateFmt(c.started_at))+'</p>'+(c.failure_reason?'<p class="message">Failure reason: '+esc(c.failure_reason)+'</p>':'')+(c.status==='active'||c.status==='pending'?'<button class="secondary cancel-challenge" data-id="'+esc(c.id)+'">إلغاء التحدي</button>':'')+'</article>').join(""):'<p class="empty">لا توجد نتائج مطابقة.</p>';
  $("challengesList").querySelectorAll(".cancel-challenge").forEach(b=>b.addEventListener("click",async()=>{if(!confirm("تأكيد إلغاء هذا التحدي؟ سيتم تسجيل العملية وإشعار المتداول."))return;b.disabled=true;try{const result=await api("/api/admin/challenges/"+encodeURIComponent(b.dataset.id)+"/cancel",{method:"POST",body:"{}"});$("challengesMessage").textContent=result.message||"تم الإلغاء.";await loadChallenges();}catch(e){$("challengesMessage").textContent=e.message;b.disabled=false;}}));
 }
+async function loadChallenges(){
+ const data=await api("/api/admin/challenges");cachedChallenges=data.challenges||[];
+ updateKpi("kpiActive",cachedChallenges.filter(c=>c.status==="active").length);
+ updateKpi("kpiPending",cachedChallenges.filter(c=>c.status==="pending").length);
+ updateKpi("kpiPassed",cachedChallenges.filter(c=>c.status==="passed").length);
+ updateKpi("kpiFailed",cachedChallenges.filter(c=>c.status==="failed").length);
+ renderChallenges();
+}
+const challengeSearch=$("challengeSearch");if(challengeSearch)challengeSearch.addEventListener("input",renderChallenges);
 $("challengesRefresh").addEventListener("click",async()=>{$("challengesMessage").textContent="جارٍ التحديث…";try{await loadChallenges();$("challengesMessage").textContent="تم تحديث التحديات.";}catch(e){$("challengesMessage").textContent=e.message;}});
 $("challengeStatusFilter").addEventListener("change",async()=>{try{await loadChallenges();$("challengesMessage").textContent="";}catch(e){$("challengesMessage").textContent=e.message;}});
 async function loadFinancials(){
