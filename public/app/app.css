@@ -84,3 +84,8 @@ button,a,input,select,textarea{transition:background-color .18s,border-color .18
 .audit-entry summary{cursor:pointer;color:var(--accent,#76d8e8);font-size:13px}
 .audit-details{margin:10px 0 0;padding:12px;max-height:260px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;direction:ltr;text-align:left;border:1px solid var(--line);border-radius:9px;background:rgba(3,10,20,.72);color:#c8d6e6;font:12px/1.6 ui-monospace,monospace}
 #auditPageInfo{min-width:110px;text-align:center}
+
+.readiness-state.optional{color:#9fb4c8;border:1px solid rgba(159,180,200,.25);background:rgba(159,180,200,.06)}
+#systemReadinessList .program-card{padding:14px}
+#systemReadinessList .program-top{align-items:center;flex-wrap:wrap}
+#systemReadinessList .program-top strong{font-size:14px}
