@@ -36,3 +36,18 @@ test("rejects invalid balances and invalid risk rules", () => {
   assert.throws(() => evaluateChallenge({ ...base, initialBalance: 0 }, rules), RangeError);
   assert.throws(() => evaluateChallenge(base, { ...rules, maxDrawdownPct: 0 }), RangeError);
 });
+
+test("fails optional trailing drawdown rule against peak equity", () => {
+  const result = evaluateChallenge({ ...base, equity: 9700, highWatermark: 10300, dailyStartEquity: 10000 }, { ...rules, trailingDrawdownPct: 5 });
+  assert.equal(result.status, "failed");
+  assert.equal(result.failureReason, "trailing_drawdown");
+  assert.ok(result.metrics.trailingDrawdownPct > 5);
+});
+test("reports trailing drawdown but does not apply it unless configured", () => {
+  const result = evaluateChallenge({ ...base, equity: 9700, highWatermark: 10300 }, rules);
+  assert.equal(result.status, "active");
+  assert.ok(result.metrics.trailingDrawdownPct > 5);
+});
+test("rejects invalid optional trailing drawdown rule", () => {
+  assert.throws(() => evaluateChallenge(base, { ...rules, trailingDrawdownPct: 0 }), RangeError);
+});
