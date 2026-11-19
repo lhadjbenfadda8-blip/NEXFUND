@@ -186,3 +186,48 @@ async function loadOperations(){
 const operationsRefresh=$("operationsRefresh");
 if(operationsRefresh)operationsRefresh.addEventListener("click",loadOperations);
 loadOperations();
+
+let auditOffset=0,auditTotal=0;
+const AUDIT_PAGE_SIZE=25;
+function auditDetails(value){
+ try{const parsed=typeof value==="string"?JSON.parse(value):value;return JSON.stringify(parsed,null,2)||"—";}
+ catch{return String(value??"—");}
+}
+async function loadAuditLogs(){
+ const msg=$("auditMessage"),host=$("auditLogsList");
+ if(!host)return;
+ msg.textContent="جارٍ تحميل سجل التدقيق…";
+ $("auditRefresh").disabled=true;
+ try{
+  const action=$("auditActionFilter").value.trim(),target=$("auditTargetFilter").value.trim();
+  const params=new URLSearchParams({limit:String(AUDIT_PAGE_SIZE),offset:String(auditOffset)});
+  if(action)params.set("action",action);
+  if(target)params.set("target_type",target);
+  const d=await api("/api/admin/audit-logs?"+params.toString());
+  const logs=d.logs||[];auditTotal=Number(d.total||0);
+  host.innerHTML=logs.length?logs.map(row=>{
+   const details=auditDetails(row.details_json);
+   return '<article class="program-card audit-entry"><div class="dash-head"><h3>'+esc(row.action||"—")+'</h3><span class="chip">'+esc(row.target_type||"—")+'</span></div><p>المنفّذ: <b>'+esc(row.actor_email||"حساب غير متاح")+'</b></p><p>معرّف الهدف: <code>'+esc(row.target_id||"—")+'</code></p><p>التاريخ: '+esc(dateFmt(row.created_at))+'</p><details><summary>تفاصيل العملية</summary><pre class="audit-details">'+esc(details)+'</pre></details></article>';
+  }).join(""):'<p class="empty">لا توجد سجلات ضمن عوامل التصفية الحالية.</p>';
+  const first=auditTotal?auditOffset+1:0,last=Math.min(auditOffset+logs.length,auditTotal);
+  $("auditPageInfo").textContent=first+"–"+last+" من "+auditTotal;
+  $("auditPrev").disabled=auditOffset===0;
+  $("auditNext").disabled=auditOffset+AUDIT_PAGE_SIZE>=auditTotal;
+  msg.textContent="تم تحميل السجل · "+dateFmt(d.generated_at);
+ }catch(e){
+  msg.textContent="تعذر تحميل سجل التدقيق: "+e.message;
+  host.innerHTML='<p class="empty">تعذر جلب السجلات. تحقق من صلاحيات المشرف والاتصال.</p>';
+  $("auditPageInfo").textContent="—";$("auditPrev").disabled=true;$("auditNext").disabled=true;
+ }finally{$("auditRefresh").disabled=false;}
+}
+const auditRefresh=$("auditRefresh");
+if(auditRefresh)auditRefresh.addEventListener("click",()=>{auditOffset=0;loadAuditLogs();});
+const auditActionFilter=$("auditActionFilter");
+if(auditActionFilter)auditActionFilter.addEventListener("change",()=>{auditOffset=0;loadAuditLogs();});
+const auditTargetFilter=$("auditTargetFilter");
+if(auditTargetFilter)auditTargetFilter.addEventListener("change",()=>{auditOffset=0;loadAuditLogs();});
+const auditPrev=$("auditPrev");
+if(auditPrev)auditPrev.addEventListener("click",()=>{auditOffset=Math.max(0,auditOffset-AUDIT_PAGE_SIZE);loadAuditLogs();});
+const auditNext=$("auditNext");
+if(auditNext)auditNext.addEventListener("click",()=>{auditOffset+=AUDIT_PAGE_SIZE;loadAuditLogs();});
+loadAuditLogs();
