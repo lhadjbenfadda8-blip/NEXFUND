@@ -533,13 +533,24 @@ export default {
         if (receivedMicros !== expectedMicros) return json({ error: "The confirmed transfer amount does not match the requested amount." }, 400);
         if (payment.txid && payment.txid !== txid) return json({ error: "A different transaction ID is already attached to this payment." }, 409);
 
-        await env.DB.batch([
-          env.DB.prepare("UPDATE crypto_payments SET txid=?,status='paid',paid_at=datetime('now'),updated_at=datetime('now') WHERE id=? AND status='pending'").bind(txid, paymentId),
-          env.DB.prepare("UPDATE challenges SET updated_at=datetime('now') WHERE id=? AND user_id=? AND status='pending'").bind(payment.challenge_id, session.user_id),
-          env.DB.prepare("INSERT INTO audit_logs (id,actor_user_id,action,target_type,target_id,details_json) VALUES (?,?,?,'crypto_payment',?,?)")
-            .bind(id(), session.user_id, "crypto_payment.confirmed", paymentId, JSON.stringify({ txid, amount_usdt: payment.amount_usdt, network: "TRC20" }))
-        ]);
-        return json({ ok: true, status: "paid", challenge_status: "pending", message: "Payment confirmed. Your challenge is awaiting account provisioning; it will become active only after the trading account is successfully created." });
+        try {
+          await env.DB.batch([
+            env.DB.prepare("UPDATE crypto_payments SET txid=?,status='paid',paid_at=datetime('now'),updated_at=datetime('now') WHERE id=? AND status='pending' AND txid IS NULL").bind(txid, paymentId),
+            env.DB.prepare("UPDATE challenges SET updated_at=datetime('now') WHERE id=? AND user_id=? AND status='pending' AND EXISTS (SELECT 1 FROM crypto_payments WHERE id=? AND status='paid' AND txid=?)").bind(payment.challenge_id, session.user_id, paymentId, txid),
+            env.DB.prepare("INSERT INTO audit_logs (id,actor_user_id,action,target_type,target_id,details_json) SELECT ?, ?, ?,'crypto_payment',?,? WHERE EXISTS (SELECT 1 FROM crypto_payments WHERE id=? AND status='paid' AND txid=?)")
+              .bind(id(), session.user_id, "crypto_payment.confirmed", paymentId, JSON.stringify({ txid, amount_usdt: payment.amount_usdt, network: "TRC20" }), paymentId, txid)
+          ]);
+        } catch (error) {
+          const duplicate = await env.DB.prepare("SELECT id FROM crypto_payments WHERE txid=? AND id<>?").bind(txid, paymentId).first();
+          if (duplicate) return json({ error: "This transaction has already been assigned to another payment." }, 409);
+          throw error;
+        }
+        const confirmed = await env.DB.prepare("SELECT status,txid FROM crypto_payments WHERE id=? AND user_id=?").bind(paymentId, session.user_id).first();
+        if (!confirmed || confirmed.status !== "paid" || confirmed.txid !== txid) {
+          if (confirmed?.status === "paid") return json({ error: "A different transaction was confirmed for this payment." }, 409);
+          return json({ error: "Payment confirmation could not be committed. Please retry safely." }, 409);
+        }
+        return json({ ok: true, status: "paid", challenge_status: "pending", txid, message: "Payment confirmed. Your challenge is awaiting account provisioning; it will become active only after the trading account is successfully created." });
       }
 
       // NEXFUND paper simulator: isolated virtual accounts and trade ledger (no broker or real-money execution).
