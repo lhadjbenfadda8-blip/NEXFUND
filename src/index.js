@@ -132,7 +132,7 @@ export default {
           return json({ error: "Snapshot fields are invalid." }, 400);
         }
         const challenge = await env.DB.prepare(
-          "SELECT c.id,c.status,c.initial_balance,c.current_balance,c.equity,c.high_watermark,c.daily_start_equity,c.daily_start_date,c.trading_days_count,p.profit_target_pct,p.daily_drawdown_pct,p.max_drawdown_pct,p.min_trading_days,t.account_login FROM challenges c JOIN evaluation_programs p ON p.id=c.program_id JOIN trading_accounts t ON t.challenge_id=c.id WHERE c.id=?"
+          "SELECT c.id,c.user_id,c.status,c.initial_balance,c.current_balance,c.equity,c.high_watermark,c.daily_start_equity,c.daily_start_date,c.trading_days_count,p.profit_target_pct,p.daily_drawdown_pct,p.max_drawdown_pct,p.min_trading_days,t.account_login FROM challenges c JOIN evaluation_programs p ON p.id=c.program_id JOIN trading_accounts t ON t.challenge_id=c.id WHERE c.id=?"
         ).bind(challengeId).first();
         if (!challenge) return json({ error: "Challenge/account mapping not found." }, 404);
         if (challenge.status !== "active") return json({ error: "Only active challenges accept provider snapshots." }, 409);
@@ -163,6 +163,11 @@ export default {
           const riskId = eventId + ":" + event.type;
           statements.push(env.DB.prepare("INSERT OR IGNORE INTO risk_events (id,challenge_id,event_type,severity,message,metric_value,threshold_value) VALUES (?,?,?,?,?,?,?)")
             .bind(riskId,challengeId,event.type,event.severity,event.type.replaceAll("_"," "),event.value,event.threshold));
+        }
+        if (nextStatus === "passed" || nextStatus === "failed") {
+          const noticeTitle = nextStatus === "passed" ? "Challenge passed" : "Challenge failed";
+          const noticeBody = nextStatus === "passed" ? "Your evaluation has passed the automated rules check." : "Your evaluation failed a risk rule: " + String(evaluation.failureReason || "unknown");
+          statements.push(env.DB.prepare("INSERT INTO notifications (id,user_id,title,body) VALUES (?,?,?,?)").bind(id(),challenge.user_id,noticeTitle,noticeBody));
         }
         await env.DB.batch(statements);
         return json({ ok:true, status:nextStatus, failure_reason:evaluation.failureReason, metrics:evaluation.metrics, events:evaluation.events });
