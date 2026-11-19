@@ -728,7 +728,7 @@ export default {
         const denied = requireAdmin(session); if (denied) return denied;
         await ensureMT5DeliveryTable(env.DB);
         const rows = await env.DB.prepare(
-          "SELECT c.id AS challenge_id,u.email,p.name AS program_name,c.initial_balance AS account_size_usd,cp.amount_usdt,cp.paid_at,c.created_at,td.email_status,t.account_login,t.server_name FROM challenges c JOIN users u ON u.id=c.user_id JOIN evaluation_programs p ON p.id=c.program_id JOIN crypto_payments cp ON cp.challenge_id=c.id LEFT JOIN mt5_account_deliveries td ON td.challenge_id=c.id LEFT JOIN trading_accounts t ON t.challenge_id=c.id WHERE cp.status='paid' AND c.status IN ('pending','active') AND (td.id IS NULL OR td.email_status='failed') ORDER BY cp.paid_at ASC LIMIT 100"
+          "SELECT c.id AS challenge_id,u.email,p.name AS program_name,c.initial_balance AS account_size_usd,cp.amount_usdt,cp.paid_at,c.created_at,td.email_status,t.account_login,t.server_name FROM challenges c JOIN users u ON u.id=c.user_id JOIN evaluation_programs p ON p.id=c.program_id JOIN crypto_payments cp ON cp.challenge_id=c.id LEFT JOIN mt5_account_deliveries td ON td.challenge_id=c.id LEFT JOIN trading_accounts t ON t.challenge_id=c.id WHERE cp.status='paid' AND c.status IN ('pending','active') AND (td.id IS NULL OR td.email_status IN ('pending','failed')) ORDER BY cp.paid_at ASC LIMIT 100"
         ).all();
         return json({ challenges: rows.results });
       }
@@ -744,13 +744,16 @@ export default {
         if (oldDelivery) {
           if (oldDelivery.email_status === 'sent') return json({ ok: true, provisioned: true, email_status: 'sent', message: 'Credentials email was already sent.' });
           const account = await env.DB.prepare('SELECT account_login,server_name FROM trading_accounts WHERE challenge_id=?').bind(challengeId).first();
+          if (!account?.account_login) return json({ error: 'A delivery record exists but the MT5 account mapping is missing. Manual reconciliation is required; no email was sent.' }, 409);
           const mail = await sendMT5CredentialsEmail(env, challenge, account, oldDelivery);
-          return json({ ok: mail.ok, provisioned: true, email_status: mail.ok ? 'sent' : 'failed' }, mail.ok ? 200 : 502);
+          return json({ ok: mail.ok, provisioned: true, email_status: mail.ok ? 'sent' : 'failed', message: mail.ok ? 'MT5 credentials email sent on retry.' : 'Email retry failed; the delivery remains available for another retry.' }, mail.ok ? 200 : 502);
         }
         const providerUrl = String(env.MT5_PROVIDER_API_URL || '');
         if (!providerUrl || !env.MT5_PROVIDER_API_KEY || !env.RESEND_API_KEY || !env.MT5_EMAIL_FROM || !env.CREDENTIALS_ENCRYPTION_KEY) return json({ error: 'Configure MT5_PROVIDER_API_URL, MT5_PROVIDER_API_KEY, RESEND_API_KEY, MT5_EMAIL_FROM and CREDENTIALS_ENCRYPTION_KEY as Worker runtime secrets/variables first. No account was created.' }, 503);
         let endpoint; try { endpoint = new URL(providerUrl); } catch { return json({ error: 'Invalid MT5 provider URL.' }, 503); }
         if (endpoint.protocol !== 'https:') return json({ error: 'MT5 provider endpoint must use HTTPS.' }, 503);
+        const accountSlot = await env.DB.prepare('SELECT id FROM trading_accounts WHERE challenge_id=?').bind(challengeId).first();
+        if (!accountSlot) return json({ error: 'Trading account mapping is missing for this challenge. No provider request was sent.' }, 409);
         let providerResponse;
         try { providerResponse = await fetch(endpoint.toString(), { method:'POST', headers:{ Authorization:'Bearer '+env.MT5_PROVIDER_API_KEY, 'Content-Type':'application/json', 'Idempotency-Key':challengeId }, body:JSON.stringify({ external_reference:challengeId, brand:'NEXFUND', server_name:'NEXFUND', platform:'MT5', account_type:'simulated', balance:Number(challenge.account_size_usd), currency:'USD', trader_email:challenge.email }) }); }
         catch { return json({ error:'Could not reach MT5 provider.' }, 502); }
