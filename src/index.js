@@ -847,6 +847,27 @@ export default {
         return json({orders:orders.results,payments:payments.results});
       }
 
+      if (url.pathname === "/api/admin/financial-ledger" && request.method === "GET") {
+        const denied = requireAdmin(session); if (denied) return denied;
+        await ensureCryptoPayments(env.DB);
+        await ensurePayoutTables(env.DB);
+        const [orderTotals, paymentTotals, payoutTotals, orders, payments, payouts] = await Promise.all([
+          env.DB.prepare("SELECT currency,status,COUNT(*) AS count,COALESCE(SUM(amount_usd),0) AS amount FROM orders GROUP BY currency,status ORDER BY currency,status").all(),
+          env.DB.prepare("SELECT status,COUNT(*) AS count,COALESCE(SUM(amount_usdt),0) AS amount FROM crypto_payments GROUP BY status ORDER BY status").all(),
+          env.DB.prepare("SELECT status,COUNT(*) AS count,COALESCE(SUM(requested_amount_usd),0) AS amount FROM payout_requests GROUP BY status ORDER BY status").all(),
+          env.DB.prepare("SELECT o.id,o.status,o.amount_usd,o.currency,o.payment_provider,o.provider_reference,o.created_at,u.email FROM orders o JOIN users u ON u.id=o.user_id ORDER BY o.created_at DESC LIMIT 200").all(),
+          env.DB.prepare("SELECT cp.id,cp.status,cp.amount_usdt,cp.txid,cp.created_at,cp.paid_at,u.email FROM crypto_payments cp JOIN users u ON u.id=cp.user_id ORDER BY cp.created_at DESC LIMIT 200").all(),
+          env.DB.prepare("SELECT pr.id,pr.status,pr.requested_amount_usd,pr.tx_reference,pr.created_at,pr.updated_at,u.email,pr.challenge_id FROM payout_requests pr JOIN users u ON u.id=pr.user_id ORDER BY pr.created_at DESC LIMIT 200").all()
+        ]);
+        return json({
+          generated_at: now(),
+          accounting_policy: { revenue: "Only paid orders and paid crypto payments are confirmed receipts. USD and USDT are reported separately; no assumed exchange rate.", payouts: "Only paid payouts are completed disbursements. Approved payouts remain outstanding commitments; pending requests await review; rejected requests are excluded." },
+          orders: { totals: orderTotals.results || [], records: orders.results || [] },
+          crypto_payments: { totals: paymentTotals.results || [], records: payments.results || [] },
+          payouts: { totals: payoutTotals.results || [], records: payouts.results || [] }
+        });
+      }
+
       if (url.pathname === "/api/admin/users" && request.method === "GET") {
         const denied = requireAdmin(session);
         if (denied) return denied;
