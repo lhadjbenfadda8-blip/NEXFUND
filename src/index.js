@@ -274,6 +274,22 @@ export default {
         return json({ ok:true, generated_at:now(), traders:users, challenges, payments, payouts, recent_challenges:recentChallenges.results||[] });
       }
 
+      if (url.pathname === "/api/admin/system-readiness" && request.method === "GET") {
+        const denied=requireAdmin(session);if(denied)return denied;
+        const readiness=getPurchaseReadiness(env);
+        const walletValid=await isValidTronAddress(getReceivingAddress(env));
+        const checks=[
+          {key:"payments",label:"تفعيل المدفوعات",ready:readiness.paymentsEnabled},
+          {key:"wallet",label:"عنوان استقبال USDT TRC20 صالح",ready:walletValid},
+          {key:"provider_url",label:"رابط مزود MT5 عبر HTTPS",ready:readiness.providerUrlValid},
+          {key:"provider_key",label:"مفتاح مزود MT5",ready:readiness.providerApiKeyConfigured},
+          {key:"encryption",label:"مفتاح تشفير بيانات الحسابات",ready:readiness.encryptionKeyValid},
+          {key:"email",label:"إعداد إرسال البريد",ready:readiness.emailConfigured},
+          {key:"trongrid",label:"مفتاح TRON Grid (اختياري لتحسين حدود الطلبات)",ready:Boolean(env.TRONGRID_API_KEY),optional:true}
+        ];
+        return json({purchase_enabled:isPurchaseEnabled(env)&&walletValid,checks,blocking:checks.filter(x=>!x.ready&&!x.optional).map(x=>x.key),generated_at:now()});
+      }
+
       if (url.pathname === "/api/admin/audit-logs" && request.method === "GET") {
         const denied=requireAdmin(session);if(denied)return denied;
         const limit=Math.min(100,Math.max(1,Number.parseInt(url.searchParams.get("limit")||"50",10)||50));
@@ -450,6 +466,7 @@ export default {
 
       if (url.pathname === "/api/challenges" && request.method === "POST") {
         if (!isPurchaseEnabled(env)) return json({ error: "Challenge purchases are unavailable until payment verification and MT5 provisioning are configured." }, 503);
+        if (!(await isValidTronAddress(getReceivingAddress(env)))) return json({ error: "The configured USDT TRC20 receiving wallet is invalid. Contact platform support." }, 503);
         await ensureCryptoPayments(env.DB);
         const body = await request.json();
         const programId = String(body.program_id || "");
@@ -501,7 +518,7 @@ export default {
       if (url.pathname.startsWith("/api/payments/") && url.pathname.endsWith("/verify") && request.method === "POST") {
         await ensureCryptoPayments(env.DB);
         if (!isPurchaseEnabled(env)) return json({ error: "Crypto payments are not enabled until payment verification and MT5 provisioning are configured." }, 503);
-        if (!getReceivingAddress(env)) return json({ error: "Receiving address is not configured." }, 503);
+        if (!(await isValidTronAddress(getReceivingAddress(env)))) return json({ error: "Receiving address is missing or is not a valid TRON wallet." }, 503);
         const paymentId = url.pathname.split("/")[3];
         const body = await request.json();
         const txid = String(body.txid || "").trim().toLowerCase();
