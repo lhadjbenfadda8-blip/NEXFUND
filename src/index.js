@@ -134,7 +134,7 @@ export default {
           return json({ error: "Snapshot fields are invalid." }, 400);
         }
         const challenge = await env.DB.prepare(
-          "SELECT c.id,c.user_id,c.status,c.initial_balance,c.current_balance,c.equity,c.high_watermark,c.daily_start_equity,c.daily_start_date,c.trading_days_count,c.last_provider_snapshot_at,p.profit_target_pct,p.daily_drawdown_pct,p.max_drawdown_pct,p.min_trading_days,t.account_login FROM challenges c JOIN evaluation_programs p ON p.id=c.program_id JOIN trading_accounts t ON t.challenge_id=c.id WHERE c.id=?"
+          "SELECT c.id,c.user_id,c.status,c.initial_balance,c.current_balance,c.equity,c.high_watermark,c.daily_start_equity,c.daily_start_date,c.trading_days_count,c.last_provider_snapshot_at,p.profit_target_pct,p.daily_drawdown_pct,p.max_drawdown_pct,p.min_trading_days,p.rules_json,t.account_login FROM challenges c JOIN evaluation_programs p ON p.id=c.program_id JOIN trading_accounts t ON t.challenge_id=c.id WHERE c.id=?"
         ).bind(challengeId).first();
         if (!challenge) return json({ error: "Challenge/account mapping not found." }, 404);
         if (challenge.status !== "active") return json({ error: "Only active challenges accept provider snapshots." }, 409);
@@ -152,7 +152,8 @@ export default {
           dailyDrawdownPct: Number(challenge.daily_drawdown_pct),
           maxDrawdownPct: Number(challenge.max_drawdown_pct),
           profitTargetPct: Number(challenge.profit_target_pct),
-          minTradingDays: Number(challenge.min_trading_days)
+          minTradingDays: Number(challenge.min_trading_days),
+          trailingDrawdownPct: (() => { try { const parsed = JSON.parse(challenge.rules_json || '{}'); return parsed.trailing_drawdown_pct == null ? undefined : Number(parsed.trailing_drawdown_pct); } catch { return undefined; } })()
         });
         const nextStatus = evaluation.status;
         const endedAt = nextStatus === "active" ? null : now();
@@ -473,14 +474,18 @@ export default {
         const minDays = Number(body.min_trading_days ?? existing.min_trading_days);
         const maxDays = body.max_trading_days === null || (body.max_trading_days === undefined && existing.max_trading_days === null) ? null : Number(body.max_trading_days ?? existing.max_trading_days);
         const status = String(body.status ?? existing.status);
+        let programRules; try { programRules = JSON.parse(existing.rules_json || '{}'); } catch { programRules = {}; }
+        const trailing = body.trailing_drawdown_pct === undefined ? (programRules.trailing_drawdown_pct ?? null) : (body.trailing_drawdown_pct === null || body.trailing_drawdown_pct === '' ? null : Number(body.trailing_drawdown_pct));
+        if (trailing !== null && (!Number.isFinite(trailing) || trailing <= 0 || trailing > 100)) return json({ error: 'Trailing drawdown must be null or between 0 and 100.' }, 400);
+        if (trailing === null) delete programRules.trailing_drawdown_pct; else programRules.trailing_drawdown_pct = trailing;
         if (!name || name.length > 120 || description.length > 1000) return json({ error: "Name (1–120 characters) and description (maximum 1000 characters) are required." }, 400);
         if (![size,fee,target,daily,maximum,minDays].every(Number.isFinite) || size < 100 || size > 10000000 || fee < 0 || fee > 100000 || target <= 0 || target > 100 || daily <= 0 || daily > 50 || maximum <= 0 || maximum > 100 || minDays < 0 || minDays > 365 || !Number.isInteger(minDays) || (maxDays !== null && (!Number.isInteger(maxDays) || maxDays < minDays || maxDays > 365))) return json({ error: "Program values are outside allowed ranges." }, 400);
         if (!["draft","active","paused","archived"].includes(status)) return json({ error: "Invalid program status." }, 400);
         await env.DB.batch([
-          env.DB.prepare("UPDATE evaluation_programs SET name=?,description=?,account_size_usd=?,fee_usd=?,profit_target_pct=?,daily_drawdown_pct=?,max_drawdown_pct=?,min_trading_days=?,max_trading_days=?,status=?,updated_at=datetime('now') WHERE id=?")
-            .bind(name,description,size,fee,target,daily,maximum,minDays,maxDays,status,programId),
+          env.DB.prepare("UPDATE evaluation_programs SET name=?,description=?,account_size_usd=?,fee_usd=?,profit_target_pct=?,daily_drawdown_pct=?,max_drawdown_pct=?,min_trading_days=?,max_trading_days=?,status=?,rules_json=?,updated_at=datetime('now') WHERE id?")
+            .bind(name,description,size,fee,target,daily,maximum,minDays,maxDays,status,JSON.stringify(programRules),programId),
           env.DB.prepare("INSERT INTO audit_logs (id,actor_user_id,action,target_type,target_id,details_json) VALUES (?,?,?,'evaluation_program',?,?)")
-            .bind(id(),session.user_id,"admin.program_updated",programId,JSON.stringify({name,account_size_usd:size,fee_usd:fee,profit_target_pct:target,daily_drawdown_pct:daily,max_drawdown_pct:maximum,min_trading_days:minDays,max_trading_days:maxDays,status}))
+            .bind(id(),session.user_id,"admin.program_updated",programId,JSON.stringify({name,account_size_usd:size,fee_usd:fee,profit_target_pct:target,daily_drawdown_pct:daily,max_drawdown_pct:maximum,min_trading_days:minDays,max_trading_days:maxDays,trailing_drawdown_pct:trailing,status}))
         ]);
         return json({ ok:true, message:"Evaluation program updated." });
       }
