@@ -450,6 +450,23 @@ export default {
         const mail=await sendMT5CredentialsEmail(env,challenge,{account_login:login,server_name:server},delivery);
         return json({ok:mail.ok,provisioned:true,email_status:mail.ok?'sent':'failed',login,server,message:mail.ok?'MT5 account provisioned and credentials email sent.':'Account created, but email failed. Retry after fixing email configuration.'},mail.ok?201:502);
       }
+      const cancelChallengeMatch = url.pathname.match(/^\\/api\\/admin\\/challenges\\/([a-f0-9-]+)\\/cancel$/i);
+      if (cancelChallengeMatch && request.method === "POST") {
+        const denied = requireAdmin(session); if (denied) return denied;
+        const challengeId = cancelChallengeMatch[1];
+        const challenge = await env.DB.prepare("SELECT id,user_id,status FROM challenges WHERE id=?").bind(challengeId).first();
+        if (!challenge) return json({ error: "Challenge not found." }, 404);
+        if (!["pending","active"].includes(challenge.status)) return json({ error: "Only pending or active challenges can be cancelled." }, 409);
+        const result = await env.DB.batch([
+          env.DB.prepare("UPDATE challenges SET status='cancelled',ended_at=datetime('now'),updated_at=datetime('now') WHERE id=? AND status IN ('pending','active')").bind(challengeId),
+          env.DB.prepare("INSERT INTO audit_logs (id,actor_user_id,action,target_type,target_id,details_json) VALUES (?,?,?,'challenge',?,?)").bind(id(),session.user_id,"challenge.cancelled",challengeId,JSON.stringify({previous_status:challenge.status})),
+          env.DB.prepare("INSERT INTO notifications (id,user_id,title,body) VALUES (?,?,?,?)").bind(id(),challenge.user_id,"Challenge cancelled","Your challenge has been cancelled by NEXFUND administration.")
+        ]);
+        const updated = await env.DB.prepare("SELECT status FROM challenges WHERE id=?").bind(challengeId).first();
+        if (!updated || updated.status !== "cancelled") return json({ error: "Challenge state changed; cancellation was not applied." }, 409);
+        return json({ ok:true, status:"cancelled", message:"Challenge cancelled and recorded in audit log." });
+      }
+
       if (url.pathname === "/api/admin/programs" && request.method === "GET") {
         const denied = requireAdmin(session); if (denied) return denied;
         await ensureDefaultPrograms(env.DB);
