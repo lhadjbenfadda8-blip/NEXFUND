@@ -283,7 +283,7 @@ export default {
         const daily = Number(body.daily_drawdown_pct ?? existing.daily_drawdown_pct);
         const maximum = Number(body.max_drawdown_pct ?? existing.max_drawdown_pct);
         const minDays = Number(body.min_trading_days ?? existing.min_trading_days);
-        const maxDays = body.max_trading_days === null ? null : Number(body.max_trading_days ?? existing.max_trading_days);
+        const maxDays = body.max_trading_days === null || (body.max_trading_days === undefined && existing.max_trading_days === null) ? null : Number(body.max_trading_days ?? existing.max_trading_days);
         const status = String(body.status ?? existing.status);
         if (!name || name.length > 120 || description.length > 1000) return json({ error: "Name (1–120 characters) and description (maximum 1000 characters) are required." }, 400);
         if (![size,fee,target,daily,maximum,minDays].every(Number.isFinite) || size < 100 || size > 10000000 || fee < 0 || fee > 100000 || target <= 0 || target > 100 || daily <= 0 || daily > 50 || maximum <= 0 || maximum > 100 || minDays < 0 || minDays > 365 || !Number.isInteger(minDays) || (maxDays !== null && (!Number.isInteger(maxDays) || maxDays < minDays || maxDays > 365))) return json({ error: "Program values are outside allowed ranges." }, 400);
