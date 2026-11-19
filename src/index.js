@@ -894,7 +894,10 @@ async function ensurePayoutTables(db) {
     created_at TEXT NOT NULL DEFAULT (datetime('now')),updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`).run();
   const payoutColumns = await db.prepare("PRAGMA table_info(payout_requests)").all();
-  if (!(payoutColumns.results || []).some(column => column.name === "payout_wallet_address")) await db.prepare("ALTER TABLE payout_requests ADD COLUMN payout_wallet_address TEXT").run();
+  if (!(payoutColumns.results || []).some(column => column.name === "payout_wallet_address")) {
+    try { await db.prepare("ALTER TABLE payout_requests ADD COLUMN payout_wallet_address TEXT").run(); }
+    catch (error) { const refreshed=await db.prepare("PRAGMA table_info(payout_requests)").all(); if (!(refreshed.results||[]).some(column=>column.name==="payout_wallet_address")) throw error; }
+  }
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_payout_user_created ON payout_requests(user_id,created_at)").run();
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_payout_status_created ON payout_requests(status,created_at)").run();
 }
