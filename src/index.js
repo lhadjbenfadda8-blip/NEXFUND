@@ -220,8 +220,8 @@ export default {
       if (url.pathname === "/api/payouts" && request.method === "GET") {
         await ensurePayoutTables(env.DB);
         const rows=await env.DB.prepare("SELECT id,challenge_id,requested_amount_usd,payout_wallet_address,status,admin_note,tx_reference,created_at,updated_at FROM payout_requests WHERE user_id=? ORDER BY created_at DESC LIMIT 50").bind(session.user_id).all();
-        const eligible=await env.DB.prepare("SELECT id,initial_balance,current_balance,status FROM challenges WHERE user_id=? AND status='passed'").bind(session.user_id).all();
-        return json({payouts:rows.results||[],eligible_challenges:(eligible.results||[]).map(c=>({challenge_id:c.id,profit:Math.max(0,Number(c.current_balance)-Number(c.initial_balance)),max_payout_usd:Math.max(0,(Number(c.current_balance)-Number(c.initial_balance))*0.8)}))});
+        const eligible=await env.DB.prepare("SELECT id,initial_balance,current_balance,(SELECT COALESCE(SUM(requested_amount_usd),0) FROM payout_requests r WHERE r.challenge_id=challenges.id AND r.status IN ('pending','approved','paid')) AS reserved_payout FROM challenges WHERE user_id=? AND status='passed'").bind(session.user_id).all();
+        return json({payouts:rows.results||[],eligible_challenges:(eligible.results||[]).map(c=>{const profit=Math.max(0,Number(c.current_balance)-Number(c.initial_balance));return {challenge_id:c.id,profit,max_payout_usd:Math.max(0,profit*0.8-Number(c.reserved_payout||0))};})});
       }
       if (url.pathname === "/api/payouts" && request.method === "POST") {
         await ensurePayoutTables(env.DB);
@@ -232,7 +232,9 @@ export default {
         const challenge=await env.DB.prepare("SELECT id,initial_balance,current_balance,status FROM challenges WHERE id=? AND user_id=?").bind(challengeId,session.user_id).first();
         if(!challenge||challenge.status!=="passed")return json({error:"Payouts are available only for passed challenges."},403);
         const profit=Math.max(0,Number(challenge.current_balance)-Number(challenge.initial_balance)),maxPayout=profit*0.8;
-        if(profit<=0||amount>maxPayout+0.000001)return json({error:"Requested amount exceeds the current payout limit.",max_payout_usd:maxPayout},400);
+        const reservedRow=await env.DB.prepare("SELECT COALESCE(SUM(requested_amount_usd),0) AS reserved FROM payout_requests WHERE challenge_id=? AND status IN ('pending','approved','paid')").bind(challengeId).first();
+        const remainingPayout=Math.max(0,maxPayout-Number(reservedRow?.reserved||0));
+        if(profit<=0||amount>remainingPayout+0.000001)return json({error:"Requested amount exceeds the remaining payout limit.",max_payout_usd:remainingPayout},400);
         const pending=await env.DB.prepare("SELECT id FROM payout_requests WHERE challenge_id=? AND status IN ('pending','approved')").bind(challengeId).first();
         if(pending)return json({error:"A payout request for this challenge is already pending or approved."},409);
         const payoutId=id();
@@ -259,7 +261,9 @@ export default {
         if(status==="paid"&&tx.length<6)return json({error:"Provide the transaction reference before marking paid."},400);
         const payout=await env.DB.prepare("SELECT id,user_id,status,requested_amount_usd FROM payout_requests WHERE id=?").bind(payoutId).first();
         if(!payout)return json({error:"Payout request not found."},404);
-        if(payout.status!=="pending"&&!(payout.status==="approved"&&status==="paid"))return json({error:"This payout is already finalized."},409);
+        if(payout.status==="pending"&&!["approved","rejected"].includes(status))return json({error:"Pending payouts can only be approved or rejected."},409);
+        if(payout.status==="approved"&&status!=="paid")return json({error:"Approved payouts can only be marked paid."},409);
+        if(!["pending","approved"].includes(payout.status))return json({error:"This payout is already finalized."},409);
         await env.DB.batch([
           env.DB.prepare("UPDATE payout_requests SET status=?,admin_note=?,tx_reference=?,reviewed_by=?,updated_at=datetime('now') WHERE id=?").bind(status,note,tx||null,session.user_id,payoutId),
           env.DB.prepare("INSERT INTO notifications(id,user_id,title,body) VALUES(?,?,?,?)").bind(id(),payout.user_id,"تحديث طلب الأرباح","تم تحديث حالة طلب الأرباح إلى "+status+(note?" — "+note:"")+(tx?" — مرجع الدفع: "+tx:"")),
