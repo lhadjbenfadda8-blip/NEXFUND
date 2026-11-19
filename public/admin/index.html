@@ -4,12 +4,32 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>إدارة حسابات MT5 | NEXFUND</title>
 <link rel="stylesheet" href="/app/app.css">
-<script src="/admin/admin.js?v=admin-kpi-01" defer></script>
+<script src="/admin/admin.js?v=operations-center-02" defer></script>
 </head>
 <body class="admin-body">
 <header class="top"><a class="brand" href="/"><span class="mark">N</span>NEX<span>FUND</span></a><a href="/app/">بوابة المتداول</a> · <a href="/admin/support.html">إدارة الدعم</a> · <a href="/admin/notifications.html">إرسال إشعار</a> · <a href="/admin/payouts.html">إدارة الأرباح</a></header>
 <main class="wrap">
 <section class="intro"><p class="eyebrow">NEXFUND ADMIN</p><h1>تجهيز حسابات <span>MT5</span></h1><p class="sub">هذه الصفحة للمشرفين فقط. لا تُنشئ حساباً إلا بعد تأكيد الدفع.</p></section>
+<section class="panel" id="operationsCenter">
+<h2>مركز العمليات المتقدم</h2>
+<p class="sub">ملخص حي من قاعدة البيانات: الحسابات، التحديات، المدفوعات والسحوبات.</p>
+<div class="program-stats">
+<span>إجمالي المتداولين<b id="opsTraders">—</b></span>
+<span>المتداولون النشطون<b id="opsActiveTraders">—</b></span>
+<span>الموقوفون<b id="opsSuspended">—</b></span>
+<span>إجمالي التحديات<b id="opsChallenges">—</b></span>
+<span>التحديات النشطة<b id="opsChallengesActive">—</b></span>
+<span>التحديات الناجحة<b id="opsPassed">—</b></span>
+<span>التحديات الفاشلة<b id="opsFailed">—</b></span>
+<span>مدفوعات معلقة<b id="opsPaymentsPending">—</b></span>
+<span>مدفوعات مؤكدة (USDT)<b id="opsPaymentsConfirmed">—</b></span>
+<span>سحوبات قيد المراجعة<b id="opsPayoutPending">—</b></span>
+<span>سحوبات معتمدة<b id="opsPayoutApproved">—</b></span>
+<span>مبالغ السحب المفتوحة<b id="opsPayoutOutstanding">—</b></span>
+</div>
+<button id="operationsRefresh" type="button" class="secondary">تحديث مركز العمليات</button>
+<p class="message" id="operationsMessage" role="status"></p>
+</section>
 <section class="panel"><h2>ملخص العمليات</h2><div class="program-stats" id="adminKpis"><span>المستخدمون<b id="kpiUsers">—</b></span><span>برامج نشطة<b id="kpiPrograms">—</b></span><span>تحديات نشطة<b id="kpiActive">—</b></span><span>تحديات معلقة<b id="kpiPending">—</b></span><span>ناجحة<b id="kpiPassed">—</b></span><span>فاشلة<b id="kpiFailed">—</b></span><span>طلبات الدفع<b id="kpiOrders">—</b></span><span>دفعات USDT<b id="kpiPayments">—</b></span></div><p class="sub">ملخص مباشر من البيانات المتاحة في لوحة الإدارة، وليس بيانات تقديرية.</p></section>
 <section class="panel">
 <h2>إدارة برامج التقييم</h2>
