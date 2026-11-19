@@ -199,6 +199,92 @@ export default {
       if (!session) return json({ error: "Authentication required." }, 401);
 
 
+      // Support tickets: authenticated trader ticket lifecycle and admin review.
+      if (url.pathname === "/api/support/tickets" && request.method === "GET") {
+        await ensureSupportTables(env.DB);
+        const rows = await env.DB.prepare("SELECT id,category,subject,status,priority,created_at,updated_at FROM support_tickets WHERE user_id=? ORDER BY updated_at DESC LIMIT 50").bind(session.user_id).all();
+        return json({ tickets: rows.results });
+      }
+      if (url.pathname === "/api/support/tickets" && request.method === "POST") {
+        await ensureSupportTables(env.DB);
+        const body=await request.json().catch(()=>null); if(!body) return json({error:"Invalid JSON body."},400);
+        const category=String(body.category||"other"), subject=String(body.subject||"").trim(), message=String(body.message||"").trim();
+        if(!["payment","account","challenge","technical","other"].includes(category)) return json({error:"Invalid ticket category."},400);
+        if(subject.length<4||subject.length>120||message.length<10||message.length>4000) return json({error:"Subject must be 4–120 characters and message 10–4000 characters."},400);
+        const ticketId=id(),messageId=id();
+        await env.DB.batch([
+          env.DB.prepare("INSERT INTO support_tickets(id,user_id,category,subject,status,priority) VALUES(?,?,?,?,'open','normal')").bind(ticketId,session.user_id,category,subject),
+          env.DB.prepare("INSERT INTO support_ticket_messages(id,ticket_id,author_user_id,author_role,message) VALUES(?,?,?,'trader',?)").bind(messageId,ticketId,session.user_id,message)
+        ]);
+        return json({ok:true,ticket_id:ticketId,status:"open"},201);
+      }
+      if (url.pathname.startsWith("/api/support/tickets/") && request.method === "GET") {
+        await ensureSupportTables(env.DB);
+        const ticketId=url.pathname.split("/")[4];
+        const ticket=await env.DB.prepare("SELECT id,category,subject,status,priority,created_at,updated_at FROM support_tickets WHERE id=? AND user_id=?").bind(ticketId,session.user_id).first();
+        if(!ticket) return json({error:"Ticket not found."},404);
+        const messages=await env.DB.prepare("SELECT id,author_role,message,created_at FROM support_ticket_messages WHERE ticket_id=? ORDER BY created_at ASC").bind(ticketId).all();
+        return json({ticket,messages:messages.results});
+      }
+      if (url.pathname.startsWith("/api/support/tickets/") && url.pathname.endsWith("/messages") && request.method === "POST") {
+        await ensureSupportTables(env.DB);
+        const ticketId=url.pathname.split("/")[4], body=await request.json().catch(()=>null);
+        const message=String(body?.message||"").trim(); if(message.length<2||message.length>4000) return json({error:"Message must be 2–4000 characters."},400);
+        const ticket=await env.DB.prepare("SELECT id,status FROM support_tickets WHERE id=? AND user_id=?").bind(ticketId,session.user_id).first();
+        if(!ticket) return json({error:"Ticket not found."},404);
+        if(ticket.status==="closed") return json({error:"This ticket is closed."},409);
+        await env.DB.batch([
+          env.DB.prepare("INSERT INTO support_ticket_messages(id,ticket_id,author_user_id,author_role,message) VALUES(?,?,?,'trader',?)").bind(id(),ticketId,session.user_id,message),
+          env.DB.prepare("UPDATE support_tickets SET status='open',updated_at=datetime('now') WHERE id=?").bind(ticketId)
+        ]);
+        return json({ok:true});
+      }
+      if (url.pathname === "/api/admin/support/tickets" && request.method === "GET") {
+        const denied=requireAdmin(session); if(denied) return denied;
+        await ensureSupportTables(env.DB);
+        const status=String(url.searchParams.get("status")||"");
+        const rows=status&&["open","in_progress","resolved","closed"].includes(status)
+          ? await env.DB.prepare("SELECT t.id,t.user_id,t.category,t.subject,t.status,t.priority,t.created_at,t.updated_at,u.email FROM support_tickets t JOIN users u ON u.id=t.user_id WHERE t.status=? ORDER BY t.updated_at DESC LIMIT 100").bind(status).all()
+          : await env.DB.prepare("SELECT t.id,t.user_id,t.category,t.subject,t.status,t.priority,t.created_at,t.updated_at,u.email FROM support_tickets t JOIN users u ON u.id=t.user_id ORDER BY t.updated_at DESC LIMIT 100").all();
+        return json({tickets:rows.results});
+      }
+      if (url.pathname.startsWith("/api/admin/support/tickets/") && url.pathname.endsWith("/messages") && request.method === "GET") {
+        const denied=requireAdmin(session); if(denied) return denied;
+        await ensureSupportTables(env.DB);
+        const ticketId=url.pathname.split("/")[5];
+        const ticket=await env.DB.prepare("SELECT t.*,u.email FROM support_tickets t JOIN users u ON u.id=t.user_id WHERE t.id=?").bind(ticketId).first();
+        if(!ticket) return json({error:"Ticket not found."},404);
+        const messages=await env.DB.prepare("SELECT id,author_role,message,created_at FROM support_ticket_messages WHERE ticket_id=? ORDER BY created_at ASC").bind(ticketId).all();
+        return json({ticket,messages:messages.results});
+      }
+      if (url.pathname.startsWith("/api/admin/support/tickets/") && url.pathname.endsWith("/messages") && request.method === "POST") {
+        const denied=requireAdmin(session); if(denied) return denied;
+        await ensureSupportTables(env.DB);
+        const ticketId=url.pathname.split("/")[5], body=await request.json().catch(()=>null);
+        const message=String(body?.message||"").trim(); if(message.length<2||message.length>4000) return json({error:"Message must be 2–4000 characters."},400);
+        const ticket=await env.DB.prepare("SELECT id,user_id,status FROM support_tickets WHERE id=?").bind(ticketId).first();
+        if(!ticket) return json({error:"Ticket not found."},404);
+        await env.DB.batch([
+          env.DB.prepare("INSERT INTO support_ticket_messages(id,ticket_id,author_user_id,author_role,message) VALUES(?,?,?,'admin',?)").bind(id(),ticketId,session.user_id,message),
+          env.DB.prepare("UPDATE support_tickets SET status='in_progress',updated_at=datetime('now') WHERE id=? AND status IN ('open','in_progress')").bind(ticketId),
+          env.DB.prepare("INSERT INTO notifications(id,user_id,title,body) VALUES(?,?,?,?)").bind(id(),ticket.user_id,"رد جديد من دعم NEXFUND","تم الرد على تذكرتك: "+ticketId)
+        ]);
+        return json({ok:true});
+      }
+      if (url.pathname.startsWith("/api/admin/support/tickets/") && request.method === "PATCH") {
+        const denied=requireAdmin(session); if(denied) return denied;
+        await ensureSupportTables(env.DB);
+        const ticketId=url.pathname.split("/")[5], body=await request.json().catch(()=>null), status=String(body?.status||"");
+        if(!["open","in_progress","resolved","closed"].includes(status)) return json({error:"Invalid ticket status."},400);
+        const ticket=await env.DB.prepare("SELECT id,user_id FROM support_tickets WHERE id=?").bind(ticketId).first();
+        if(!ticket) return json({error:"Ticket not found."},404);
+        await env.DB.batch([
+          env.DB.prepare("UPDATE support_tickets SET status=?,updated_at=datetime('now') WHERE id=?").bind(status,ticketId),
+          env.DB.prepare("INSERT INTO notifications(id,user_id,title,body) VALUES(?,?,?,?)").bind(id(),ticket.user_id,"تحديث حالة تذكرتك","تم تحديث حالة التذكرة إلى: "+status)
+        ]);
+        return json({ok:true,status});
+      }
+
       if (url.pathname === "/api/programs" && request.method === "GET") {
         await ensureDefaultPrograms(env.DB);
         const rows = await env.DB.prepare("SELECT id,name,description,account_size_usd,fee_usd,profit_target_pct,daily_drawdown_pct,max_drawdown_pct,min_trading_days,max_trading_days FROM evaluation_programs WHERE status='active' ORDER BY account_size_usd ASC").all();
@@ -690,6 +776,23 @@ function clearCookie() { return "nexfund_session=; HttpOnly; Secure; SameSite=La
 function corsHeaders(request) {
   const origin = request.headers.get("Origin");
   return origin ? { "Access-Control-Allow-Origin": origin, "Access-Control-Allow-Credentials": "true", "Access-Control-Allow-Methods": "GET,POST,OPTIONS", "Access-Control-Allow-Headers": "Content-Type", "Vary": "Origin" } : {};
+}
+async function ensureSupportTables(db) {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS support_tickets (
+    id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    category TEXT NOT NULL CHECK(category IN ('payment','account','challenge','technical','other')),
+    subject TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','in_progress','resolved','closed')),
+    priority TEXT NOT NULL DEFAULT 'normal' CHECK(priority IN ('normal','high')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  await db.prepare(`CREATE TABLE IF NOT EXISTS support_ticket_messages (
+    id TEXT PRIMARY PRIMARY KEY,ticket_id TEXT NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+    author_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    author_role TEXT NOT NULL CHECK(author_role IN ('trader','admin')),message TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`.replace("id TEXT PRIMARY PRIMARY KEY","id TEXT PRIMARY KEY")).run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_support_tickets_user_updated ON support_tickets(user_id,updated_at)").run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_support_messages_ticket_created ON support_ticket_messages(ticket_id,created_at)").run();
 }
 async function ensureSimulatorTables(db) {
   await db.prepare(`CREATE TABLE IF NOT EXISTS simulator_accounts (
