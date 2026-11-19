@@ -1,11 +1,18 @@
+function isBase64Encoded32ByteKey(value) {
+  const encoded = String(value || "").trim();
+  if (!encoded || encoded.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) return false;
+  const padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
+  const decodedLength = (encoded.length / 4) * 3 - padding;
+  return decodedLength === 32;
+}
+
 export function getPurchaseReadiness(env = {}) {
   let providerUrlValid = false;
   try {
     const endpoint = new URL(String(env.MT5_PROVIDER_API_URL || ""));
     providerUrlValid = endpoint.protocol === "https:";
   } catch {}
-  let encryptionKeyValid = false;
-  try { encryptionKeyValid = atob(String(env.CREDENTIALS_ENCRYPTION_KEY || "")).length === 32; } catch {}
+  const encryptionKeyValid = isBase64Encoded32ByteKey(env.CREDENTIALS_ENCRYPTION_KEY);
   return {
     paymentsEnabled: env.PAYMENTS_ENABLED === "true",
     receivingAddressConfigured: Boolean(String(env.USDT_TRC20_ADDRESS || "").trim()),
