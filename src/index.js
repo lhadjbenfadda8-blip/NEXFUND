@@ -239,8 +239,11 @@ export default {
         const pending=await env.DB.prepare("SELECT id FROM payout_requests WHERE challenge_id=? AND status IN ('pending','approved')").bind(challengeId).first();
         if(pending)return json({error:"A payout request for this challenge is already pending or approved."},409);
         const payoutId=id();
-        await env.DB.prepare("INSERT INTO payout_requests(id,user_id,challenge_id,requested_amount_usd,payout_wallet_address,status) VALUES(?,?,?,?,?,'pending')").bind(payoutId,session.user_id,challengeId,amount,wallet).run();
-        await env.DB.prepare("INSERT INTO audit_logs(id,actor_user_id,action,target_type,target_id,details_json) VALUES(?,?,?,'payout_request',?,?)").bind(id(),session.user_id,"payout.requested",payoutId,JSON.stringify({amount_usd:amount,challenge_id:challengeId,max_payout_usd:maxPayout})).run();
+        const payoutBatch=await env.DB.batch([
+          env.DB.prepare("INSERT INTO payout_requests(id,user_id,challenge_id,requested_amount_usd,payout_wallet_address,status) SELECT ?,c.user_id,c.id,?,?,'pending' FROM challenges c WHERE c.id=? AND c.user_id=? AND c.status='passed' AND ? <= ((c.current_balance-c.initial_balance)*0.8-COALESCE((SELECT SUM(r.requested_amount_usd) FROM payout_requests r WHERE r.challenge_id=c.id AND r.status IN ('pending','approved','paid')),0)) AND NOT EXISTS (SELECT 1 FROM payout_requests r WHERE r.challenge_id=c.id AND r.status IN ('pending','approved'))").bind(payoutId,amount,wallet,challengeId,session.user_id,amount),
+          env.DB.prepare("INSERT INTO audit_logs(id,actor_user_id,action,target_type,target_id,details_json) SELECT ?,?,?,'payout_request',?,? WHERE EXISTS (SELECT 1 FROM payout_requests WHERE id=?)").bind(id(),session.user_id,"payout.requested",payoutId,JSON.stringify({amount_usd:amount,challenge_id:challengeId,max_payout_usd:maxPayout}),payoutId)
+        ]);
+        if(Number(payoutBatch?.[0]?.meta?.changes||0)!==1)return json({error:"Payout limit changed or another request is already open. Refresh and try again.",max_payout_usd:remainingPayout},409);
         return json({ok:true,payout_id:payoutId,status:"pending",max_payout_usd:maxPayout},201);
       }
       if (url.pathname === "/api/admin/payouts" && request.method === "GET") {
