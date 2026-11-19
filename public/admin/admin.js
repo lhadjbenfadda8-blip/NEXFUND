@@ -92,3 +92,27 @@ $("riskSeverityFilter").addEventListener("change",async()=>{try{await loadRiskEv
 $("riskChallengeFilter").addEventListener("change",async()=>{try{await loadRiskEvents();$("riskMessage").textContent="";}catch(e){$("riskMessage").textContent=e.message;}});
 async function load(){ $("adminMessage").textContent="جارٍ تحميل الطلبات…"; try{const me=await api("/api/auth/me");if(!me.user||me.user.role!=="admin"){location.href="/app/";return;} $("adminEmail").textContent=me.user.email;await loadPrograms();await loadUsers();await loadChallenges();await loadFinancials();await loadRiskEvents();const data=await api("/api/admin/challenges/pending-provisioning");$("queue").innerHTML=data.challenges.length?data.challenges.map(c=>'<article class="program-card"><h3>'+esc(c.program_name)+'</h3><p>'+esc(c.email)+'</p><p>الرصيد الافتراضي: <b>'+money(c.account_size_usd)+'</b></p><p>المبلغ المؤكد: '+Number(c.amount_usdt).toFixed(2)+' USDT</p><p>الحالة: '+(c.email_status==="failed"?"فشل إرسال البريد — إعادة المحاولة متاحة":"بانتظار إنشاء الحساب")+'</p><button class="primary provision" data-id="'+esc(c.challenge_id)+'">'+(c.email_status==="failed"?"إعادة إرسال بيانات الدخول":"إنشاء حساب MT5 وإرسال البيانات")+'</button><p class="message" id="msg-'+esc(c.challenge_id)+'"></p></article>').join(""):'<p class="empty">لا توجد طلبات مدفوعة تنتظر تجهيز حساب MT5.</p>';$("adminMessage").textContent="تم تحميل قائمة الطلبات.";document.querySelectorAll(".provision").forEach(b=>b.addEventListener("click",async()=>{if(!confirm("سيتم الاتصال بمزود MT5 وإنشاء حساب محاكاة ثم إرسال بيانات الدخول إلى بريد العميل. هل تريد المتابعة؟"))return;b.disabled=true;const msg=$("msg-"+b.dataset.id);msg.textContent="جارٍ تجهيز الحساب وإرسال البريد…";try{const result=await api("/api/admin/challenges/"+encodeURIComponent(b.dataset.id)+"/provision",{method:"POST",body:"{}"});msg.textContent=result.message||"اكتملت العملية.";await load();}catch(e){msg.textContent=e.message;b.disabled=false;}}));}catch(e){$("adminMessage").textContent=e.message;$("queue").innerHTML='<p class="empty">تعذر تحميل لوحة الإدارة. سجّل الدخول بحساب مشرف عبر بوابة المتداول أولاً.</p>';}}
 $("refreshBtn").addEventListener("click",load);load();
+async function loadOperations(){
+ const msg=$("operationsMessage"); if(msg)msg.textContent="جارٍ تحميل المؤشرات…";
+ try{
+  const d=await api("/api/admin/overview");
+  const set=(id,v)=>{const el=$(id);if(el)el.textContent=String(v??0);};
+  const fmt=v=>new Intl.NumberFormat("en-US",{maximumFractionDigits:2}).format(Number(v||0));
+  set("opsTraders",d.traders?.total);
+  set("opsActiveTraders",d.traders?.active);
+  set("opsSuspended",d.traders?.suspended);
+  set("opsChallenges",d.challenges?.total);
+  set("opsChallengesActive",d.challenges?.active);
+  set("opsPassed",d.challenges?.passed);
+  set("opsFailed",d.challenges?.failed);
+  set("opsPaymentsPending",d.payments?.pending);
+  set("opsPaymentsConfirmed",fmt(d.payments?.confirmed_usdt)+" USDT");
+  set("opsPayoutPending",d.payouts?.pending);
+  set("opsPayoutApproved",d.payouts?.approved);
+  set("opsPayoutOutstanding",fmt(d.payouts?.outstanding_usd)+" USD");
+  if(msg)msg.textContent="آخر تحديث: "+dateFmt(d.generated_at);
+ }catch(e){if(msg)msg.textContent="تعذر تحميل مركز العمليات: "+e.message;}
+}
+const operationsRefresh=$("operationsRefresh");
+if(operationsRefresh)operationsRefresh.addEventListener("click",loadOperations);
+loadOperations();
