@@ -254,6 +254,21 @@ export default {
         if(Number(payoutBatch?.[0]?.meta?.changes||0)!==1)return json({error:"Payout limit changed or another request is already open. Refresh and try again.",max_payout_usd:remainingPayout},409);
         return json({ok:true,payout_id:payoutId,status:"pending",max_payout_usd:maxPayout},201);
       }
+      // Admin operations overview: aggregated KPIs and recent challenge activity.
+      if (url.pathname === "/api/admin/overview" && request.method === "GET") {
+        const denied = requireAdmin(session); if (denied) return denied;
+        await ensureCryptoPayments(env.DB);
+        await ensurePayoutTables(env.DB);
+        const [users, challenges, payments, payouts, recentChallenges] = await Promise.all([
+          env.DB.prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN status='active' THEN 1 ELSE 0 END) AS active, SUM(CASE WHEN status='suspended' THEN 1 ELSE 0 END) AS suspended FROM users WHERE role='trader'").first(),
+          env.DB.prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN status='active' THEN 1 ELSE 0 END) AS active, SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) AS pending, SUM(CASE WHEN status='passed' THEN 1 ELSE 0 END) AS passed, SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed FROM challenges").first(),
+          env.DB.prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) AS pending, SUM(CASE WHEN status='paid' THEN 1 ELSE 0 END) AS paid, COALESCE(SUM(CASE WHEN status='paid' THEN amount_usdt ELSE 0 END),0) AS confirmed_usdt FROM crypto_payments").first(),
+          env.DB.prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) AS pending, SUM(CASE WHEN status='approved' THEN 1 ELSE 0 END) AS approved, SUM(CASE WHEN status='paid' THEN 1 ELSE 0 END) AS paid, COALESCE(SUM(CASE WHEN status IN ('pending','approved') THEN requested_amount_usd ELSE 0 END),0) AS outstanding_usd FROM payout_requests").first(),
+          env.DB.prepare("SELECT c.id,c.status,c.initial_balance,c.current_balance,c.equity,c.created_at,u.email,p.name AS program_name FROM challenges c JOIN users u ON u.id=c.user_id JOIN evaluation_programs p ON p.id=c.program_id ORDER BY c.created_at DESC LIMIT 12").all()
+        ]);
+        return json({ ok:true, generated_at:now(), traders:users, challenges, payments, payouts, recent_challenges:recentChallenges.results||[] });
+      }
+
       if (url.pathname === "/api/admin/payouts" && request.method === "GET") {
         const denied=requireAdmin(session);if(denied)return denied;
         await ensurePayoutTables(env.DB);
