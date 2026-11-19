@@ -51,3 +51,14 @@ test("reports trailing drawdown but does not apply it unless configured", () => 
 test("rejects invalid optional trailing drawdown rule", () => {
   assert.throws(() => evaluateChallenge(base, { ...rules, trailingDrawdownPct: 0 }), RangeError);
 });
+
+test("fails when maximum trading-day limit is exceeded", () => {
+  const result = evaluateChallenge({ ...base, tradingDays: 11 }, { ...rules, maxTradingDays: 10 });
+  assert.equal(result.status, "failed");
+  assert.equal(result.failureReason, "maximum_trading_days");
+  assert.equal(result.events[0].threshold, 10);
+});
+test("allows trading on the maximum day and rejects invalid max-day rule", () => {
+  assert.equal(evaluateChallenge({ ...base, tradingDays: 10 }, { ...rules, maxTradingDays: 10 }).status, "active");
+  assert.throws(() => evaluateChallenge(base, { ...rules, maxTradingDays: 4 }), RangeError);
+});
