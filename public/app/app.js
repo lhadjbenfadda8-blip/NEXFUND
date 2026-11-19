@@ -13,6 +13,18 @@ function money(v){return new Intl.NumberFormat("en-US",{style:"currency",currenc
 async function loadPrograms(){
  const data=await api("/api/programs");
  purchaseEnabled=Boolean(data.purchase_enabled);
+ const readiness=data.purchase_readiness||{};
+ const checks=[
+  ["تفعيل المدفوعات PAYMENTS_ENABLED",readiness.paymentsEnabled],
+  ["عنوان استقبال USDT على TRC20",readiness.receivingAddressConfigured],
+  ["رابط مزود MT5 آمن (HTTPS)",readiness.providerUrlValid],
+  ["مفتاح API لمزود MT5",readiness.providerApiKeyConfigured],
+  ["مفتاح تشفير بيانات حسابات MT5",readiness.encryptionKeyValid],
+  ["إعداد البريد لإرسال بيانات الحساب",readiness.emailConfigured]
+ ];
+ let readinessBox=$("purchaseReadiness");
+ if(!readinessBox){readinessBox=document.createElement("section");readinessBox.id="purchaseReadiness";readinessBox.className="purchase-readiness";$("programNotice").insertAdjacentElement("afterend",readinessBox);}
+ readinessBox.innerHTML='<div class="readiness-head"><strong>'+(purchaseEnabled?'الشراء جاهز تقنياً':'متطلبات تفعيل الشراء')+'</strong><span class="readiness-state '+(purchaseEnabled?'ready':'blocked')+'">'+(purchaseEnabled?'جاهز':'موقوف للحماية')+'</span></div><p>'+(purchaseEnabled?'اكتملت إعدادات الدفع وتجهيز حسابات MT5.':'لن نقبل أموالاً قبل اكتمال جميع متطلبات الدفع وتسليم الحسابات.')+'</p><ul>'+checks.map(([label,ok])=>'<li><span class="readiness-dot '+(ok?'ok':'missing')+'"></span>'+escapeHtml(label)+'<b>'+(ok?'مكتمل':'ناقص')+'</b></li>').join('')+'</ul>';
  $("programList").innerHTML=(data.programs||[]).map(p=>'<article class="program-card"><div class="program-top"><span class="chip">MT5</span><span class="program-fee">رسوم مقترحة: '+money(p.fee_usd)+'</span></div><h4>'+money(p.account_size_usd)+' حساب افتراضي</h4><div class="program-stats"><span>هدف الربح <b>'+p.profit_target_pct+'%</b></span><span>الخسارة اليومية <b>'+p.daily_drawdown_pct+'%</b></span><span>أقصى خسارة <b>'+p.max_drawdown_pct+'%</b></span><span>أيام التداول الدنيا <b>'+p.min_trading_days+'</b></span></div><button class="primary choose-program" data-program="'+escapeHtml(p.id)+'" '+(purchaseEnabled?'':'disabled')+'>'+(purchaseEnabled?'اختيار هذا الحساب':'الشراء غير متاح حالياً')+'</button></article>').join("");
  $("programNotice").textContent=purchaseEnabled?"الأسعار والشروط مقترحة؛ تأكد من مراجعتها قبل الشراء.":"الشراء غير متاح حالياً حتى تفعيل التحقق من الدفع وربط مزود حسابات MT5 والبريد.";
  document.querySelectorAll(".choose-program").forEach(b=>b.addEventListener("click",()=>selectProgram(b.dataset.program,data.programs)));
