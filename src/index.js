@@ -456,7 +456,7 @@ export default {
         return json({ programs: rows.results });
       }
 
-      const adminProgramMatch = url.pathname.match(/^\\/api\\/admin\\/programs\\/([a-zA-Z0-9_-]+)$/);
+      const adminProgramMatch = url.pathname.match(/^\/api\/admin\/programs\/([a-zA-Z0-9_-]+)$/);
       if (adminProgramMatch && request.method === "PUT") {
         const denied = requireAdmin(session); if (denied) return denied;
         const programId = adminProgramMatch[1];
@@ -496,7 +496,7 @@ export default {
         return json({ users: users.count, challenges: challenges.results, pending_orders: pendingOrders.count });
       }
 
-      const adminUserStatusMatch = url.pathname.match(/^\\/api\\/admin\\/users\\/([a-f0-9-]+)\\/status$/i);
+      const adminUserStatusMatch = url.pathname.match(/^\/api\/admin\/users\/([a-f0-9-]+)\/status$/i);
       if (adminUserStatusMatch && request.method === "PATCH") {
         const denied = requireAdmin(session); if (denied) return denied;
         const userId = adminUserStatusMatch[1];
