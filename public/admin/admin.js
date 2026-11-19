@@ -231,3 +231,19 @@ if(auditPrev)auditPrev.addEventListener("click",()=>{auditOffset=Math.max(0,audi
 const auditNext=$("auditNext");
 if(auditNext)auditNext.addEventListener("click",()=>{auditOffset+=AUDIT_PAGE_SIZE;loadAuditLogs();});
 loadAuditLogs();
+
+async function loadSystemReadiness(){
+ const msg=$("systemReadinessMessage"),host=$("systemReadinessList");
+ if(!host)return;
+ msg.textContent="جارٍ فحص إعدادات النظام…";
+ const button=$("systemReadinessRefresh");if(button)button.disabled=true;
+ try{
+  const d=await api("/api/admin/system-readiness");
+  host.innerHTML=(d.checks||[]).map(item=>'<article class="program-card"><div class="program-top"><strong>'+esc(item.label)+'</strong><span class="readiness-state '+(item.ready?'ready':item.optional?'optional':'blocked')+'">'+(item.ready?'مكتمل':item.optional?'اختياري':'ناقص')+'</span></div></article>').join("");
+  msg.textContent=(d.purchase_enabled?"الشراء جاهز من ناحية الإعدادات.":"الشراء ما زال محمياً وموقوفاً.")+" · آخر فحص: "+dateFmt(d.generated_at);
+ }catch(e){msg.textContent="تعذر فحص إعدادات النظام: "+e.message;host.innerHTML='<p class="empty">تعذر تحميل حالة التكامل.</p>';}
+ finally{if(button)button.disabled=false;}
+}
+const systemReadinessRefresh=$("systemReadinessRefresh");
+if(systemReadinessRefresh)systemReadinessRefresh.addEventListener("click",loadSystemReadiness);
+loadSystemReadiness();
