@@ -110,9 +110,18 @@ async function loadTraderProfile(userId){
  const el=$("traderProfile");el.hidden=false;
  el.innerHTML='<div class="dash-head"><div><h2>ملف المتداول</h2><p class="sub">'+esc(u.email)+' · '+esc(u.status)+' · '+esc(u.role)+'</p></div><button type="button" class="secondary" id="closeTraderProfile">إغلاق الملف</button></div><div class="program-stats"><span>التحديات<b>'+d.challenges.length+'</b></span><span>الصفقات المسجلة<b>'+Number(a.closed_trades||0)+'</b></span><span>صافي نتائج الصفقات<b>'+money2(a.net_pnl)+'</b></span><span>طلبات السحب<b>'+d.payouts.length+'</b></span></div>'+analyticsHtml+symbolsHtml+tradesHtml+
  section("التحديات",d.challenges,c=>'<article class="program-card"><h4>'+esc(c.program_name)+' · '+esc(c.status)+'</h4><p>Challenge: <code>'+esc(c.id)+'</code></p><p>الرصيد: '+money2(c.current_balance)+' · Equity: '+money2(c.equity)+'</p><p>حساب MT5: '+esc(c.account_login||"غير مجهز")+' · '+esc(c.server_name||"—")+'</p><p>الصفقات المسجلة: '+esc(c.trade_count)+' · صافي P/L: '+money2(c.net_trade_pnl)+'</p><p>أيام التداول: '+esc(c.trading_days_count)+' · الإنشاء: '+esc(dateFmt(c.created_at))+'</p></article>')+
- section("طلبات السحب",d.payouts,p=>'<article class="program-card"><p>'+money2(p.requested_amount_usd)+' · '+esc(p.status)+'</p><p>Challenge: '+esc(p.challenge_id)+'</p><p>TX reference: '+esc(p.tx_reference||"—")+'</p><p>'+esc(p.admin_note||"")+' · '+esc(dateFmt(p.created_at))+'</p></article>')+
+ section("طلبات السحب",d.payouts,p=>'<article class="program-card"><p>'+money2(p.requested_amount_usd)+' · '+esc(p.status)+'</p><p>Challenge: '+esc(p.challenge_id)+'</p><p>محفظة الاستلام: <code>'+esc(p.payout_wallet_address||"غير مسجلة")+'</code></p><p>TX reference: '+esc(p.tx_reference||"—")+'</p><p>'+esc(p.admin_note||"")+' · '+esc(dateFmt(p.created_at))+'</p>'+(p.status==="pending"?'<button class="primary payout-review" data-id="'+esc(p.id)+'" data-status="approved">موافقة</button> <button class="secondary payout-review" data-id="'+esc(p.id)+'" data-status="rejected">رفض</button>':p.status==="approved"?'<button class="primary payout-review" data-id="'+esc(p.id)+'" data-status="paid">تأكيد الدفع</button>':'')+'</article>')+
  section("المدفوعات",d.payments,p=>'<article class="program-card"><p>'+Number(p.amount_usdt||0).toFixed(2)+' USDT · '+esc(p.status)+'</p><p>TXID: <code>'+esc(p.txid||"—")+'</code></p><p>'+esc(dateFmt(p.created_at))+'</p></article>')+
  section("سجل المخاطر",d.risk_events,r=>'<article class="program-card"><p>'+esc(r.severity)+' · '+esc(r.event_type)+'</p><p>'+esc(r.message)+'</p><p>Challenge: '+esc(r.challenge_id)+' · '+esc(dateFmt(r.created_at))+'</p></article>');
+ el.querySelectorAll(".payout-review").forEach(btn=>btn.addEventListener("click",async()=>{
+  const status=btn.dataset.status;let admin_note="",tx_reference="";
+  if(status==="rejected"){admin_note=prompt("سبب رفض طلب السحب:")||"";if(admin_note.trim().length<3)return;}
+  if(status==="paid"){tx_reference=prompt("أدخل مرجع معاملة التحويل على الشبكة:")||"";if(tx_reference.trim().length<6)return;}
+  if(!confirm(status==="approved"?"تأكيد الموافقة على طلب السحب؟":status==="rejected"?"تأكيد رفض طلب السحب؟":"تأكيد أن التحويل تم فعلياً؟"))return;
+  btn.disabled=true;
+  try{await api("/api/admin/payouts/"+encodeURIComponent(btn.dataset.id),{method:"PATCH",body:JSON.stringify({status,admin_note,tx_reference})});await openTraderProfile(u.id);}
+  catch(e){alert(e.message);btn.disabled=false;}
+ }));
  $("closeTraderProfile").addEventListener("click",()=>{el.hidden=true;el.innerHTML="";});
  el.scrollIntoView({behavior:"smooth",block:"start"});
 }
