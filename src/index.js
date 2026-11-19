@@ -209,6 +209,57 @@ export default {
         return json({summary:{trades:total,net_pnl:Number(summary?.net_pnl||0),wins,losses:Number(summary?.losses||0),win_rate:total?wins/total*100:0,best_trade:Number(summary?.best_trade||0),worst_trade:Number(summary?.worst_trade||0)},account:account||null,daily:daily.results||[],open_positions:openPositions.results||[],data_source:"simulator"});
       }
 
+      // Trader payout requests and admin review.
+      if (url.pathname === "/api/payouts" && request.method === "GET") {
+        await ensurePayoutTables(env.DB);
+        const rows=await env.DB.prepare("SELECT id,challenge_id,requested_amount_usd,status,admin_note,tx_reference,created_at,updated_at FROM payout_requests WHERE user_id=? ORDER BY created_at DESC LIMIT 50").bind(session.user_id).all();
+        const eligible=await env.DB.prepare("SELECT id,initial_balance,current_balance,status FROM challenges WHERE user_id=? AND status='passed'").bind(session.user_id).all();
+        return json({payouts:rows.results||[],eligible_challenges:(eligible.results||[]).map(c=>({challenge_id:c.id,profit:Math.max(0,Number(c.current_balance)-Number(c.initial_balance)),max_payout_usd:Math.max(0,(Number(c.current_balance)-Number(c.initial_balance))*0.8)}))});
+      }
+      if (url.pathname === "/api/payouts" && request.method === "POST") {
+        await ensurePayoutTables(env.DB);
+        const body=await request.json().catch(()=>null);if(!body)return json({error:"Invalid JSON body."},400);
+        const challengeId=String(body.challenge_id||"").trim(), amount=Number(body.amount_usd);
+        if(!challengeId||!Number.isFinite(amount)||amount<=0||amount>1000000)return json({error:"Enter a valid challenge and payout amount."},400);
+        const challenge=await env.DB.prepare("SELECT id,initial_balance,current_balance,status FROM challenges WHERE id=? AND user_id=?").bind(challengeId,session.user_id).first();
+        if(!challenge||challenge.status!=="passed")return json({error:"Payouts are available only for passed challenges."},403);
+        const profit=Math.max(0,Number(challenge.current_balance)-Number(challenge.initial_balance)),maxPayout=profit*0.8;
+        if(profit<=0||amount>maxPayout+0.000001)return json({error:"Requested amount exceeds the current payout limit.",max_payout_usd:maxPayout},400);
+        const pending=await env.DB.prepare("SELECT id FROM payout_requests WHERE challenge_id=? AND status IN ('pending','approved')").bind(challengeId).first();
+        if(pending)return json({error:"A payout request for this challenge is already pending or approved."},409);
+        const payoutId=id();
+        await env.DB.prepare("INSERT INTO payout_requests(id,user_id,challenge_id,requested_amount_usd,status) VALUES(?,?,?,?,'pending')").bind(payoutId,session.user_id,challengeId,amount).run();
+        await env.DB.prepare("INSERT INTO audit_logs(id,actor_user_id,action,target_type,target_id,details_json) VALUES(?,?,?,'payout_request',?,?)").bind(id(),session.user_id,"payout.requested",payoutId,JSON.stringify({amount_usd:amount,challenge_id:challengeId,max_payout_usd:maxPayout})).run();
+        return json({ok:true,payout_id:payoutId,status:"pending",max_payout_usd:maxPayout},201);
+      }
+      if (url.pathname === "/api/admin/payouts" && request.method === "GET") {
+        const denied=requireAdmin(session);if(denied)return denied;
+        await ensurePayoutTables(env.DB);
+        const status=String(url.searchParams.get("status")||"");
+        const rows=status&&["pending","approved","rejected","paid"].includes(status)
+          ? await env.DB.prepare("SELECT r.*,u.email,c.initial_balance,c.current_balance FROM payout_requests r JOIN users u ON u.id=r.user_id JOIN challenges c ON c.id=r.challenge_id WHERE r.status=? ORDER BY r.created_at DESC LIMIT 100").bind(status).all()
+          : await env.DB.prepare("SELECT r.*,u.email,c.initial_balance,c.current_balance FROM payout_requests r JOIN users u ON u.id=r.user_id JOIN challenges c ON c.id=r.challenge_id ORDER BY r.created_at DESC LIMIT 100").all();
+        return json({payouts:rows.results||[]});
+      }
+      if (url.pathname.startsWith("/api/admin/payouts/") && request.method === "PATCH") {
+        const denied=requireAdmin(session);if(denied)return denied;
+        await ensurePayoutTables(env.DB);
+        const payoutId=url.pathname.split("/")[4],body=await request.json().catch(()=>null);
+        const status=String(body?.status||""),note=String(body?.admin_note||"").trim().slice(0,1000),tx=String(body?.tx_reference||"").trim().slice(0,160);
+        if(!["approved","rejected","paid"].includes(status))return json({error:"Invalid payout status."},400);
+        if(status==="rejected"&&note.length<3)return json({error:"Please provide a reason for rejection."},400);
+        if(status==="paid"&&tx.length<6)return json({error:"Provide the transaction reference before marking paid."},400);
+        const payout=await env.DB.prepare("SELECT id,user_id,status,requested_amount_usd FROM payout_requests WHERE id=?").bind(payoutId).first();
+        if(!payout)return json({error:"Payout request not found."},404);
+        if(payout.status!=="pending"&&!(payout.status==="approved"&&status==="paid"))return json({error:"This payout is already finalized."},409);
+        await env.DB.batch([
+          env.DB.prepare("UPDATE payout_requests SET status=?,admin_note=?,tx_reference=?,reviewed_by=?,updated_at=datetime('now') WHERE id=?").bind(status,note,tx||null,session.user_id,payoutId),
+          env.DB.prepare("INSERT INTO notifications(id,user_id,title,body) VALUES(?,?,?,?)").bind(id(),payout.user_id,"تحديث طلب الأرباح","تم تحديث حالة طلب الأرباح إلى "+status+(note?" — "+note:"")+(tx?" — مرجع الدفع: "+tx:"")),
+          env.DB.prepare("INSERT INTO audit_logs(id,actor_user_id,action,target_type,target_id,details_json) VALUES(?,?,?,'payout_request',?,?)").bind(id(),session.user_id,"payout."+status,payoutId,JSON.stringify({amount_usd:payout.requested_amount_usd,note,tx_reference:tx}))
+        ]);
+        return json({ok:true,status});
+      }
+
       // Notifications center API.
       if (url.pathname === "/api/notifications" && request.method === "GET") {
         await ensureNotificationTable(env.DB);
@@ -817,6 +868,18 @@ function clearCookie() { return "nexfund_session=; HttpOnly; Secure; SameSite=La
 function corsHeaders(request) {
   const origin = request.headers.get("Origin");
   return origin ? { "Access-Control-Allow-Origin": origin, "Access-Control-Allow-Credentials": "true", "Access-Control-Allow-Methods": "GET,POST,OPTIONS", "Access-Control-Allow-Headers": "Content-Type", "Vary": "Origin" } : {};
+}
+async function ensurePayoutTables(db) {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS payout_requests (
+    id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
+    requested_amount_usd REAL NOT NULL CHECK(requested_amount_usd>0),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected','paid')),
+    admin_note TEXT,tx_reference TEXT,reviewed_by TEXT REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_payout_user_created ON payout_requests(user_id,created_at)").run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_payout_status_created ON payout_requests(status,created_at)").run();
 }
 async function ensureNotificationTable(db) {
   await db.prepare(`CREATE TABLE IF NOT EXISTS notifications (
