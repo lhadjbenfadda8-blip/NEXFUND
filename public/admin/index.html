@@ -11,6 +11,25 @@
 <main class="wrap">
 <section class="intro"><p class="eyebrow">NEXFUND ADMIN</p><h1>تجهيز حسابات <span>MT5</span></h1><p class="sub">هذه الصفحة للمشرفين فقط. لا تُنشئ حساباً إلا بعد تأكيد الدفع.</p></section>
 <section class="panel">
+<h2>إدارة برامج التقييم</h2>
+<p class="sub">تعديل حجم الحساب، السعر، أهداف الربح، حدود الخسارة، أيام التداول وحالة البرنامج.</p>
+<label>البرنامج<select id="programSelect"><option value="">جارٍ تحميل البرامج…</option></select></label>
+<div class="program-grid">
+<label>اسم البرنامج<input id="programName" maxlength="120"></label>
+<label>الوصف<input id="programDescription" maxlength="1000"></label>
+<label>حجم الحساب (USD)<input id="programSize" type="number" min="100" max="10000000"></label>
+<label>رسوم البرنامج (USD)<input id="programFee" type="number" min="0" max="100000"></label>
+<label>هدف الربح %<input id="programTarget" type="number" step="0.1" min="0.1" max="100"></label>
+<label>حد الخسارة اليومية %<input id="programDaily" type="number" step="0.1" min="0.1" max="50"></label>
+<label>أقصى خسارة %<input id="programMaxLoss" type="number" step="0.1" min="0.1" max="100"></label>
+<label>أقل أيام تداول<input id="programMinDays" type="number" min="0" max="365"></label>
+<label>أقصى أيام تداول (اختياري)<input id="programMaxDays" type="number" min="0" max="365" placeholder="بدون حد"></label>
+<label>الحالة<select id="programStatus"><option value="draft">مسودة</option><option value="active">نشط</option><option value="paused">متوقف</option><option value="archived">مؤرشف</option></select></label>
+</div>
+<button id="saveProgram" class="primary" type="button">حفظ التغييرات</button>
+<p id="programEditMessage" class="message" role="status"></p>
+</section>
+<section class="panel">
 <div class="dash-head"><div><h2>طلبات مدفوعة بانتظار التجهيز</h2><p id="adminEmail" class="sub"></p></div><button id="refreshBtn" class="secondary" type="button">تحديث</button></div>
 <p id="adminMessage" class="message" role="status">جارٍ التحقق من الصلاحيات…</p>
 <div id="queue"><p class="empty">جارٍ تحميل الطلبات…</p></div>
