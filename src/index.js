@@ -786,7 +786,7 @@ async function ensureSupportTables(db) {
     created_at TEXT NOT NULL DEFAULT (datetime('now')),updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`).run();
   await db.prepare(`CREATE TABLE IF NOT EXISTS support_ticket_messages (
-    id TEXT PRIMARY PRIMARY KEY,ticket_id TEXT NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+    id TEXT PRIMARY KEY,ticket_id TEXT NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
     author_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
     author_role TEXT NOT NULL CHECK(author_role IN ('trader','admin')),message TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
