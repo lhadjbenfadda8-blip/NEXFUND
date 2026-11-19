@@ -408,11 +408,27 @@ export default {
 
       if (url.pathname === "/api/dashboard" && request.method === "GET") {
         await ensureChallengeSnapshotSchema(env.DB);
-        const challenges = await env.DB.prepare(
-          "SELECT c.id,c.status,c.initial_balance,c.current_balance,c.equity,c.high_watermark,c.daily_start_equity,c.daily_start_date,c.trading_days_count,c.started_at,c.ended_at,c.failure_reason,c.last_provider_snapshot_at,c.created_at,p.name AS program_name,p.profit_target_pct,p.daily_drawdown_pct,p.max_drawdown_pct,t.platform,t.connection_status,t.account_login,t.server_name FROM challenges c JOIN evaluation_programs p ON p.id=c.program_id LEFT JOIN trading_accounts t ON t.challenge_id=c.id WHERE c.user_id=? ORDER BY c.created_at DESC"
-        ).bind(session.user_id).all();
-        const notifications = await env.DB.prepare("SELECT id,title,body,created_at,read_at FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 20").bind(session.user_id).all();
-        return json({ challenges: challenges.results, notifications: notifications.results });
+        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS notifications (
+          id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          title TEXT NOT NULL, body TEXT NOT NULL, read_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )`).run();
+        let challenges;
+        try {
+          challenges = await env.DB.prepare(
+            "SELECT c.id,c.status,c.initial_balance,c.current_balance,c.equity,c.high_watermark,c.daily_start_equity,c.daily_start_date,c.trading_days_count,c.started_at,c.ended_at,c.failure_reason,c.last_provider_snapshot_at,c.created_at,p.name AS program_name,p.profit_target_pct,p.daily_drawdown_pct,p.max_drawdown_pct,t.platform,t.connection_status,t.account_login,t.server_name FROM challenges c JOIN evaluation_programs p ON p.id=c.program_id LEFT JOIN trading_accounts t ON t.challenge_id=c.id WHERE c.user_id=? ORDER BY c.created_at DESC"
+          ).bind(session.user_id).all();
+        } catch (error) {
+          console.error("NEXFUND dashboard challenges query failed", error);
+          return json({ error: "تعذر تحميل حسابات التحدي.", code: "DASHBOARD_CHALLENGES_QUERY_FAILED" }, 500);
+        }
+        let notifications;
+        try {
+          notifications = await env.DB.prepare("SELECT id,title,body,created_at,read_at FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 20").bind(session.user_id).all();
+        } catch (error) {
+          console.error("NEXFUND dashboard notifications query failed", error);
+          notifications = { results: [] };
+        }
+        return json({ challenges: challenges.results || [], notifications: notifications.results || [] });
       }
 
       if (url.pathname === "/api/challenges" && request.method === "GET") {
