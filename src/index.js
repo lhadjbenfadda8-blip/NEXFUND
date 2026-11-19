@@ -199,6 +199,16 @@ export default {
       if (!session) return json({ error: "Authentication required." }, 401);
 
 
+      if (url.pathname === "/api/analytics" && request.method === "GET") {
+        await ensureSimulatorTables(env.DB);
+        const summary=await env.DB.prepare("SELECT COUNT(*) AS trades,COALESCE(SUM(pnl),0) AS net_pnl,COALESCE(SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END),0) AS wins,COALESCE(SUM(CASE WHEN pnl<0 THEN 1 ELSE 0 END),0) AS losses,COALESCE(MAX(pnl),0) AS best_trade,COALESCE(MIN(pnl),0) AS worst_trade FROM simulator_trades WHERE user_id=?").bind(session.user_id).first();
+        const account=await env.DB.prepare("SELECT balance,equity,updated_at FROM simulator_accounts WHERE user_id=?").bind(session.user_id).first();
+        const daily=await env.DB.prepare("SELECT date(created_at) AS day,COUNT(*) AS trades,COALESCE(SUM(pnl),0) AS pnl,COALESCE(SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END),0) AS wins FROM simulator_trades WHERE user_id=? AND created_at>=datetime('now','-30 days') GROUP BY date(created_at) ORDER BY day ASC").bind(session.user_id).all();
+        const openPositions=await env.DB.prepare("SELECT symbol,side,quantity,entry_price,current_price,unrealized_pnl,opened_at FROM simulator_positions WHERE user_id=? AND status='open' ORDER BY opened_at DESC LIMIT 100").bind(session.user_id).all();
+        const total=Number(summary?.trades||0), wins=Number(summary?.wins||0);
+        return json({summary:{trades:total,net_pnl:Number(summary?.net_pnl||0),wins,losses:Number(summary?.losses||0),win_rate:total?wins/total*100:0,best_trade:Number(summary?.best_trade||0),worst_trade:Number(summary?.worst_trade||0)},account:account||null,daily:daily.results||[],open_positions:openPositions.results||[],data_source:"simulator"});
+      }
+
       // Notifications center API.
       if (url.pathname === "/api/notifications" && request.method === "GET") {
         await ensureNotificationTable(env.DB);
