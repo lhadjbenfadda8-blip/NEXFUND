@@ -25,17 +25,18 @@ async function showPayment(paymentId){
     const data=await api("/api/payments/"+encodeURIComponent(paymentId));
     const p=data.payment;
     $("paymentAmount").textContent=Number(p.amount_usdt).toFixed(2)+" USDT";
-    const receivingAddress=data.receiving_address || "TCgnNJivezDYXMPngcffwDGKNt3tFrfN1z";
-    $("paymentAddress").textContent=receivingAddress;
+    const receivingAddress=String(data.receiving_address||"").trim();
+    $("paymentAddress").textContent=receivingAddress||"عنوان الاستقبال غير متاح حالياً — لا ترسل أي أموال.";
     $("paymentAddress").classList.remove("hidden");
     $("paymentTxid").parentElement.classList.remove("hidden");
     $("verifyPaymentBtn").classList.remove("hidden");
-    $("paymentNetwork").textContent=data.network+" — "+data.token;
-    $("paymentStatus").textContent=p.status==="paid"?"تم تأكيد الدفع": "بانتظار التحويل";
+    $("paymentNetwork").textContent=(data.network||"TRON (TRC20)")+" — "+(data.token||"USDT");
+    $("paymentStatus").textContent=p.status==="paid"?"تم تأكيد الدفع": "طلب الدفع قيد الانتظار";
     $("paymentWarning").textContent=!data.payment_enabled
-        ?"عنوان الاستقبال مضبوط، لكن التحقق الآلي متوقف حتى تفعيل إعداد PAYMENTS_ENABLED بعد اختبار النظام."
-        :"أدخل رقم المعاملة بعد التحويل ليتم التحقق من وصول USDT على شبكة TRON.";
-    $("verifyPaymentBtn").disabled=!data.payment_enabled;
+        ?"الشراء والتحقق غير مفعّلين حالياً. لا ترسل أموالاً حتى يظهر عنوان صحيح ويصبح التحقق متاحاً."
+        :"تحقق من عنوان الاستقبال والشبكة والمبلغ قبل أي تحويل.";
+    $("verifyPaymentBtn").disabled=!data.payment_enabled||!receivingAddress;
+    $("copyAddressBtn").disabled=!receivingAddress;
   }catch(error){
     $("paymentStatus").textContent="تعذر تحميل تفاصيل الدفع: "+error.message;
     $("paymentWarning").textContent="لا ترسل أي أموال. نحتاج إصلاح إعدادات الخادم أولاً.";
