@@ -25,13 +25,13 @@ test("inline and external frontend JavaScript parses without syntax errors",asyn
     for(const block of blocks) {
       const source=block[1].trim();
       if(!source) continue;
-      assert.doesNotThrow(()=>new vm.Script(source,{filename:file}),file);
+      try { new vm.Script(source,{filename:file}); } catch (error) { assert.fail(file+": "+error.stack); }
       checked++;
     }
   }
   for(const file of jsFiles) {
     const source=await readFile(file,"utf8");
-    assert.doesNotThrow(()=>new vm.Script(source,{filename:file}),file);
+    try { new vm.Script(source,{filename:file}); } catch (error) { assert.fail(file+": "+error.stack); }
     checked++;
   }
   assert.ok(checked>0,"Expected to check frontend scripts.");
