@@ -65,9 +65,32 @@ $("challengesRefresh").addEventListener("click",async()=>{$("challengesMessage")
 $("challengeStatusFilter").addEventListener("change",async()=>{try{await loadChallenges();$("challengesMessage").textContent="";}catch(e){$("challengesMessage").textContent=e.message;}});
 async function loadFinancials(){
  const data=await api("/api/admin/financials");
+ await loadFinancialLedger();
  const orders=data.orders||[],payments=data.payments||[];updateKpi("kpiOrders",orders.length);updateKpi("kpiPayments",payments.length);
  $("ordersList").innerHTML=orders.length?orders.map(o=>'<article class="program-card"><h3>'+esc(o.program_name)+'</h3><p>'+esc(o.email)+'</p><p>Order: <b>'+esc(o.id)+'</b></p><p>Amount: <b>'+money(o.amount_usd)+' '+esc(o.currency)+'</b></p><p>Status: '+esc(o.status)+'</p><p>Payment method: '+esc(o.payment_provider||"—")+'</p><p>Created: '+esc(dateFmt(o.created_at))+'</p></article>').join(""):'<p class="empty">لا توجد طلبات مسجلة.</p>';
  $("paymentsList").innerHTML=payments.length?payments.map(p=>'<article class="program-card"><h3>'+esc(p.program_name)+'</h3><p>'+esc(p.email)+'</p><p>Payment ID: '+esc(p.id)+'</p><p>Amount: <b>'+Number(p.amount_usdt).toFixed(2)+' USDT</b></p><p>Status: <b>'+esc(p.status)+'</b> · Challenge: '+esc(p.challenge_status)+'</p><p>TXID: <code style="overflow-wrap:anywhere">'+esc(p.txid||"—")+'</code></p><p>Created: '+esc(dateFmt(p.created_at))+' · Paid: '+esc(dateFmt(p.paid_at))+'</p></article>').join(""):'<p class="empty">لا توجد دفعات مسجلة.</p>';
+}
+async function loadFinancialLedger(){
+ const d=await api("/api/admin/financial-ledger");
+ const sum=(rows,status)=>{const r=(rows||[]).find(x=>x.status===status);return r?Number(r.amount||0):0;};
+ const count=(rows,status)=>{const r=(rows||[]).find(x=>x.status===status);return r?Number(r.count||0):0;};
+ const orderTotals=d.orders?.totals||[],paymentTotals=d.crypto_payments?.totals||[],payoutTotals=d.payouts?.totals||[];
+ const usdPaid=orderTotals.filter(x=>x.status==="paid"&&String(x.currency||"USD").toUpperCase()==="USD").reduce((n,x)=>n+Number(x.amount||0),0);
+ const otherPaid=orderTotals.filter(x=>x.status==="paid"&&String(x.currency||"USD").toUpperCase()!=="USD");
+ const usdtPaid=sum(paymentTotals,"paid"),paidOut=sum(payoutTotals,"paid"),approved=sum(payoutTotals,"approved"),pending=sum(payoutTotals,"pending");
+ const stats=[
+  ["إيرادات الطلبات المؤكدة (USD)",money(usdPaid)],
+  ["دفعات USDT المؤكدة",usdtPaid.toFixed(2)+" USDT"],
+  ["طلبات دفع معلقة",count(orderTotals,"pending")+count(paymentTotals,"pending")],
+  ["سحوبات معتمدة غير مدفوعة",money(approved)],
+  ["طلبات سحب قيد المراجعة",money(pending)],
+  ["السحوبات المدفوعة",money(paidOut)]
+ ];
+ $("ledgerSummary").innerHTML=stats.map(x=>'<span>'+esc(x[0])+'<b>'+esc(x[1])+'</b></span>').join("")+
+  (otherPaid.length?otherPaid.map(x=>'<span>إيرادات مؤكدة ('+esc(x.currency)+')<b>'+Number(x.amount||0).toFixed(2)+' '+esc(x.currency)+'</b></span>').join(""):"");
+ const rows=d.payouts?.records||[];
+ $("ledgerPayouts").innerHTML=rows.length?rows.map(p=>'<article class="program-card"><h3>'+esc(p.email)+' · '+money(p.requested_amount_usd)+'</h3><p>الحالة: <b>'+esc(p.status)+'</b> · Challenge: <code>'+esc(p.challenge_id)+'</code></p><p>طلب السحب: '+esc(p.id)+'</p><p>مرجع التحويل: <code style="overflow-wrap:anywhere">'+esc(p.tx_reference||"—")+'</code></p><p>تاريخ الطلب: '+esc(dateFmt(p.created_at))+' · آخر تحديث: '+esc(dateFmt(p.updated_at))+'</p></article>').join(""):'<p class="empty">لا توجد طلبات سحب.</p>';
+ $("ledgerUpdated").textContent="آخر تحديث: "+dateFmt(d.generated_at);
 }
 $("financialsRefresh").addEventListener("click",async()=>{$("financialsMessage").textContent="جارٍ تحديث البيانات…";try{await loadFinancials();$("financialsMessage").textContent="تم تحديث البيانات.";}catch(e){$("financialsMessage").textContent=e.message;}});
 let adminUsers=[];
