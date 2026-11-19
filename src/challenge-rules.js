@@ -25,7 +25,7 @@ export function resolveChallengeRules(challenge, program = {}) {
     dailyDrawdownPct:Number(source.daily_drawdown_pct ?? program.daily_drawdown_pct),
     maxDrawdownPct:Number(source.max_drawdown_pct ?? program.max_drawdown_pct),
     minTradingDays:Math.max(0,Math.floor(Number(source.min_trading_days ?? program.min_trading_days ?? 0))),
-    maxTradingDays:source.max_trading_days==null ? (program.max_trading_days==null?null:Number(program.max_trading_days)) : Number(source.max_trading_days),
+    maxTradingDays:Object.hasOwn(source,"max_trading_days") ? (source.max_trading_days==null?null:Number(source.max_trading_days)) : (program.max_trading_days==null?null:Number(program.max_trading_days)),
     trailingDrawdownPct:nested.trailing_drawdown_pct==null?null:Number(nested.trailing_drawdown_pct)
   };
 }
