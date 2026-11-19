@@ -21,6 +21,7 @@ jobs:
           node --experimental-default-type=module --check src/tron-address.js
           node --experimental-default-type=module --check src/payout-rules.js
           node --experimental-default-type=module --check src/challenge-rules.js
+          node --experimental-default-type=module --check src/purchase-readiness.js
       - name: Risk engine regression tests
         run: node --experimental-default-type=module --test tests/risk-engine.test.js
       - name: Authentication rate limit tests
@@ -33,3 +34,5 @@ jobs:
         run: node --experimental-default-type=module --test tests/payout-rules.test.js
       - name: Challenge rule snapshot tests
         run: node --experimental-default-type=module --test tests/challenge-rules.test.js
+      - name: Purchase readiness tests
+        run: node --experimental-default-type=module --test tests/purchase-readiness.test.js
