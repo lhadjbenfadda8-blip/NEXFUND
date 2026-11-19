@@ -661,3 +661,18 @@ button { font: inherit; }
 .program-disclaimer{text-align:center;color:var(--muted, #9aa7b8);font-size:12px;margin:22px auto 0}
 @media(max-width:1000px){.program-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.program-grid{grid-template-columns:1fr}.program-card.featured{transform:none}}
+
+/* NEXFUND visual refresh — midnight / electric cyan */
+:root{--bg:#070b14;--surface:#101827;--surface-light:#162235;--text:#f4f7fc;--muted:#98a8bc;--accent:#35d0e8;--border:rgba(148,180,210,.14)}
+body{background:radial-gradient(ellipse at 12% 0%,rgba(34,92,137,.18),transparent 38%),radial-gradient(ellipse at 88% 22%,rgba(29,166,184,.10),transparent 32%),var(--bg)}
+.announcement{background:linear-gradient(90deg,#0c1827,#101e30,#0c1827);border-bottom:1px solid var(--border)}
+.brand-mark{background:linear-gradient(135deg,#35d0e8,#4b88ff);color:#06111d;box-shadow:0 5px 20px rgba(53,208,232,.22)}
+.button{background:linear-gradient(135deg,#35d0e8,#62a8ff);border-color:transparent;color:#07121e;box-shadow:0 8px 24px rgba(53,208,232,.13)}
+.button:hover{background:linear-gradient(135deg,#72e5f2,#91c4ff)}
+.button-outline{background:transparent;color:var(--accent);border-color:rgba(53,208,232,.5);box-shadow:none}
+.hero h1 span,.brand>span:last-child>span{color:var(--accent)}
+.chart-card{background:linear-gradient(145deg,rgba(19,34,53,.96),rgba(9,17,30,.98));border-color:rgba(53,208,232,.2);box-shadow:0 24px 70px rgba(0,0,0,.25)}
+.chart-line{stroke:#35d0e8!important}.chart-area{fill:url(#chartFill)}
+.visual-glow{background:rgba(35,172,204,.13)}
+section,article,.card,.program-card,.faq-item{border-radius:16px}
+:focus-visible{outline:2px solid #35d0e8;outline-offset:3px}
