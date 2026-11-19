@@ -69,6 +69,8 @@ async function ensureCryptoPayments(db) {
 
 const DEFAULT_TRC20_RECEIVING_ADDRESS = "TCgnNJivezDYXMPngcffwDGKNt3tFrfN1z";
 const getReceivingAddress = env => env.USDT_TRC20_ADDRESS || DEFAULT_TRC20_RECEIVING_ADDRESS;
+const isProvisioningConfigured = env => { try { return new URL(String(env.MT5_PROVIDER_API_URL||"")).protocol === "https:" && Boolean(env.MT5_PROVIDER_API_KEY && env.RESEND_API_KEY && env.MT5_EMAIL_FROM && env.CREDENTIALS_ENCRYPTION_KEY); } catch { return false; } };
+const isPurchaseEnabled = env => env.PAYMENTS_ENABLED === "true" && isProvisioningConfigured(env);
 const id = () => crypto.randomUUID();
 const rateLimited = (result) => json({ error: "Too many attempts. Please wait before trying again." }, 429, { "Retry-After": String(result.retryAfter) });
 
@@ -400,10 +402,11 @@ export default {
       if (url.pathname === "/api/programs" && request.method === "GET") {
         await ensureDefaultPrograms(env.DB);
         const rows = await env.DB.prepare("SELECT id,name,description,account_size_usd,fee_usd,profit_target_pct,daily_drawdown_pct,max_drawdown_pct,min_trading_days,max_trading_days FROM evaluation_programs WHERE status='active' ORDER BY account_size_usd ASC").all();
-        return json({ programs: rows.results, pricing_status: "provisional" });
+        return json({ programs: rows.results, pricing_status: "provisional", purchase_enabled: isPurchaseEnabled(env) });
       }
 
       if (url.pathname === "/api/challenges" && request.method === "POST") {
+        if (!isPurchaseEnabled(env)) return json({ error: "Challenge purchases are unavailable until payment verification and MT5 provisioning are configured." }, 503);
         await ensureCryptoPayments(env.DB);
         const body = await request.json();
         const programId = String(body.program_id || "");
@@ -441,12 +444,12 @@ export default {
         const paymentId = url.pathname.split("/")[3];
         const payment = await env.DB.prepare("SELECT id,challenge_id,amount_usdt,status,txid,created_at,paid_at FROM crypto_payments WHERE id=? AND user_id=?").bind(paymentId, session.user_id).first();
         if (!payment) return json({ error: "Payment request not found." }, 404);
-        return json({ payment, network: "TRON (TRC20)", token: "USDT", receiving_address: getReceivingAddress(env), configuration_ready: Boolean(getReceivingAddress(env)), payment_enabled: env.PAYMENTS_ENABLED === "true" });
+        return json({ payment, network: "TRON (TRC20)", token: "USDT", receiving_address: getReceivingAddress(env), configuration_ready: Boolean(getReceivingAddress(env)), payment_enabled: isPurchaseEnabled(env) });
       }
 
       if (url.pathname.startsWith("/api/payments/") && url.pathname.endsWith("/verify") && request.method === "POST") {
         await ensureCryptoPayments(env.DB);
-        if (env.PAYMENTS_ENABLED !== "true") return json({ error: "Crypto payments are not enabled yet." }, 503);
+        if (!isPurchaseEnabled(env)) return json({ error: "Crypto payments are not enabled until payment verification and MT5 provisioning are configured." }, 503);
         if (!getReceivingAddress(env)) return json({ error: "Receiving address is not configured." }, 503);
         const paymentId = url.pathname.split("/")[3];
         const body = await request.json();
