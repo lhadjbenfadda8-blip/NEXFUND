@@ -676,3 +676,13 @@ body{background:radial-gradient(ellipse at 12% 0%,rgba(34,92,137,.18),transparen
 .visual-glow{background:rgba(35,172,204,.13)}
 section,article,.card,.program-card,.faq-item{border-radius:16px}
 :focus-visible{outline:2px solid #35d0e8;outline-offset:3px}
+
+/* Phase 2 polish: stronger hierarchy, layout rhythm and responsive cards */
+:root{--accent:#35d0e8;--border:rgba(145,177,207,.16)}
+.site-header{position:sticky;top:0;z-index:20;background:rgba(7,11,20,.86);backdrop-filter:blur(16px)}
+.hero{padding-block:clamp(55px,8vw,100px);min-height:unset}.hero h1{letter-spacing:-.045em;line-height:1.04}.hero-description{max-width:58ch;color:#aebdd0}
+.button,.button-small{border-radius:10px}.button-outline{border-color:rgba(53,208,232,.4)}
+.chart-card,.program-card,.faq-item,.card,.feature-card{transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease}
+.chart-card:hover,.program-card:hover,.feature-card:hover{transform:translateY(-3px);border-color:rgba(53,208,232,.36);box-shadow:0 18px 45px rgba(0,0,0,.24)}section[id]{scroll-margin-top:100px}
+@media(max-width:800px){.hero{grid-template-columns:1fr;gap:34px;padding-block:58px}.site-header{height:auto;min-height:68px}.navigation{gap:14px}}
+@media(max-width:560px){.section-container,.site-header{width:calc(100% - 28px)}.hero{padding-block:42px}.hero-actions{display:flex;flex-wrap:wrap;gap:12px}.button{min-height:45px;padding-inline:16px}}
