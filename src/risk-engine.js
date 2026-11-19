@@ -6,15 +6,14 @@
 export function evaluateChallenge(snapshot, rules) {
   const requiredSnapshot = ["initialBalance", "equity", "dailyStartEquity", "highWatermark"];
   for (const key of requiredSnapshot) {
-    if (!Number.isFinite(Number(snapshot?.[key]))) throw new TypeTypeErrorSafe(`Invalid ${key}`);
+    if (!Number.isFinite(Number(snapshot?.[key]))) throw new TypeError(`Invalid ${key}`);
   }
   const initial = Number(snapshot.initialBalance);
   const equity = Number(snapshot.equity);
   const dailyStart = Number(snapshot.dailyStartEquity);
   const priorHighWater = Number(snapshot.highWatermark);
-  if (initial <= 0 || dailyStart <= 0 || priorHighWater <= 0) {
-    throw new RangeError("Balances must be positive.");
-  }
+  if (initial <= 0 || dailyStart <= 0 || priorHighWater <= 0) throw new RangeError("Balances must be positive.");
+
   const requiredRules = ["dailyDrawdownPct", "maxDrawdownPct", "profitTargetPct"];
   for (const key of requiredRules) {
     if (!Number.isFinite(Number(rules?.[key])) || Number(rules[key]) <= 0 || Number(rules[key]) > 100) {
@@ -43,7 +42,7 @@ export function evaluateChallenge(snapshot, rules) {
     events.push({ type: "maximum_drawdown", severity: "breach", value: totalLossPct, threshold: Number(rules.maxDrawdownPct) });
   } else if (profitPct >= Number(rules.profitTargetPct) && tradingDays >= minTradingDays) {
     status = "passed";
-    events.push({ type: "profit_target", severity: "info", value: profitPct, threshold: Number(rules.profitTargetPct });
+    events.push({ type: "profit_target", severity: "info", value: profitPct, threshold: Number(rules.profitTargetPct) });
   } else if (profitPct >= Number(rules.profitTargetPct) && tradingDays < minTradingDays) {
     events.push({ type: "profit_target_waiting_days", severity: "info", value: tradingDays, threshold: minTradingDays });
   }
@@ -51,20 +50,7 @@ export function evaluateChallenge(snapshot, rules) {
   return {
     status,
     failureReason,
-    metrics: {
-      dailyLossPct,
-      totalLossPct,
-      profitPct,
-      highWatermark,
-      tradingDays,
-      minTradingDays,
-      remainingTradingDays: Math.max(0, minTradingDays - tradingDays)
-    },
+    metrics: { dailyLossPct, totalLossPct, profitPct, highWatermark, tradingDays, minTradingDays, remainingTradingDays: Math.max(0, minTradingDays - tradingDays) },
     events
   };
-}
-
-// Typo-safe custom error helper keeps thrown errors readable without a global dependency.
-function TypeTypeErrorSafe(message) {
-  return TypeError(message);
 }
