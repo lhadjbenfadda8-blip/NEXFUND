@@ -4,3 +4,14 @@
 .payment-panel{margin-top:22px;padding:18px;border:1px solid #52653d;border-radius:12px;background:#101d20}.payment-panel strong{color:var(--accent)}.wallet-address{direction:ltr;unicode-bidi:plaintext;overflow-wrap:anywhere;padding:13px;background:#091321;border:1px solid var(--line);border-radius:8px;font-family:monospace;font-size:13px;user-select:all}.payment-panel input{text-align:left;direction:ltr}
 
 .admin-body .wrap{width:min(1100px,calc(100% - 36px))}.admin-body .panel{max-width:none;margin-bottom:22px}.admin-body .program-grid{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+
+/* Trader dashboard overview and account cards */
+.trader-overview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:22px 0}
+.overview-card{border:1px solid var(--line);background:#0c1726;border-radius:12px;padding:15px;min-width:0}
+.overview-card span,.challenge-metrics span{display:block;color:var(--muted);font-size:12px}
+.overview-card strong{display:block;margin-top:8px;font-size:clamp(18px,3vw,26px);overflow-wrap:anywhere}
+.challenge-list{display:grid;gap:13px}.challenge-card{border:1px solid var(--line);border-radius:13px;background:#0c1726;padding:18px}
+.challenge-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.challenge-label{font-size:10px;letter-spacing:1.5px;color:var(--accent)}.challenge-heading h4{font-size:18px;margin:4px 0}
+.challenge-status{padding:5px 11px;border:1px solid var(--line);border-radius:20px;font-size:12px;white-space:nowrap}.status-active{border-color:#52653d;color:var(--accent)}.status-failed{color:#ff9f9f;border-color:#704343}.status-passed{color:#9bd7ff;border-color:#40617a}
+.challenge-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}.challenge-metrics strong{display:block;margin-top:3px;font-size:15px;overflow-wrap:anywhere}.challenge-foot{border-top:1px solid var(--line);padding-top:12px;color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+@media(max-width:700px){.trader-overview{grid-template-columns:repeat(2,minmax(0,1fr))}.challenge-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.challenge-heading{align-items:flex-start;flex-direction:column}}
