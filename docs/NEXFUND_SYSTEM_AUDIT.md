@@ -64,3 +64,16 @@ Review access control, session lifecycle, CSRF/origin handling, rate limits, inp
 ## Definition of done
 
 A feature is complete only when its API, data persistence, UI, permissions, error states, tests/verification, and documentation are connected and demonstrated. A screen or placeholder alone is not completion.
+
+
+## Verified implementation updates (2026-11-19)
+
+- Added database-backed per-IP throttling for registration and login. IP identifiers are hashed before storage; registration and login use separate windows.
+- Added TRON Base58Check address validation for payout destinations.
+- Payout requests now capture the destination wallet; the trader and admin views display it.
+- Payout allowance subtracts pending, approved, and paid requests from the 80% share. The request insert also rechecks allowance and open-request state in one conditional SQL statement to reduce race conditions.
+- Payout transitions are constrained to pending -> approved/rejected and approved -> paid. Admin UI only displays actions valid for the current state.
+- Challenge terms are snapshotted at purchase time; provider risk evaluation and trader/admin views use the stored terms, protecting existing challenges from later program edits. Legacy challenges without snapshots fall back to program rules.
+- CI now checks Worker/module syntax, risk-engine tests, auth-rate-limit tests, TRON address tests, inline frontend JavaScript syntax, payout rules, and challenge rule snapshots.
+
+These changes passed GitHub Actions on the main branch at commit da4f46ac9df2ea7f200a28887b724b274ab59d09. This is code-level verification only; the live Worker deployment, D1 production migration, payment provider, and MT5 provider are not certified by CI.
