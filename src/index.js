@@ -308,6 +308,28 @@ export default {
         return json({ users: users.count, challenges: challenges.results, pending_orders: pendingOrders.count });
       }
 
+      const adminUserStatusMatch = url.pathname.match(/^\\/api\\/admin\\/users\\/([a-f0-9-]+)\\/status$/i);
+      if (adminUserStatusMatch && request.method === "PATCH") {
+        const denied = requireAdmin(session); if (denied) return denied;
+        const userId = adminUserStatusMatch[1];
+        let body; try { body = await request.json(); } catch { return json({ error: "Invalid JSON body." }, 400); }
+        const status = String(body.status || "");
+        if (!["active","suspended"].includes(status)) return json({ error: "Status must be active or suspended." }, 400);
+        if (userId === session.user_id && status === "suspended") return json({ error: "You cannot suspend your own administrator account." }, 400);
+        const user = await env.DB.prepare("SELECT id,email,status,role FROM users WHERE id=?").bind(userId).first();
+        if (!user) return json({ error: "User not found." }, 404);
+        if (user.role === "admin" && status === "suspended") {
+          const admins = await env.DB.prepare("SELECT COUNT(*) AS count FROM users WHERE role='admin' AND status='active'").first();
+          if (Number(admins.count) <= 1) return json({ error: "Cannot suspend the last active administrator." }, 409);
+        }
+        await env.DB.batch([
+          env.DB.prepare("UPDATE users SET status=?,updated_at=datetime('now') WHERE id=?").bind(status,userId),
+          env.DB.prepare("INSERT INTO audit_logs (id,actor_user_id,action,target_type,target_id,details_json) VALUES (?,?,?,'user',?,?)").bind(id(),session.user_id,"admin.user_status_changed",userId,JSON.stringify({email:user.email,old_status:user.status,new_status:status}))
+        ]);
+        if (status === "suspended") await env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(userId).run();
+        return json({ ok:true, user:{id:user.id,email:user.email,status}, message: status === "suspended" ? "User suspended and sessions revoked." : "User reactivated." });
+      }
+
       if (url.pathname === "/api/admin/users" && request.method === "GET") {
         const denied = requireAdmin(session);
         if (denied) return denied;
