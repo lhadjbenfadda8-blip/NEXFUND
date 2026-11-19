@@ -17,5 +17,8 @@ jobs:
         run: |
           node --experimental-default-type=module --check src/index.js
           node --experimental-default-type=module --check src/risk-engine.js
+          node --experimental-default-type=module --check src/rate-limit.js
       - name: Risk engine regression tests
         run: node --experimental-default-type=module --test tests/risk-engine.test.js
+      - name: Authentication rate limit tests
+        run: node --experimental-default-type=module --test tests/rate-limit.test.js
