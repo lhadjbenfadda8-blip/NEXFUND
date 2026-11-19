@@ -632,9 +632,11 @@ export default {
       }
 
       if (url.pathname === "/api/challenges" && request.method === "GET") {
-        const rows = await env.DB.prepare("SELECT c.*,p.name AS program_name FROM challenges c JOIN evaluation_programs p ON p.id=c.program_id WHERE c.user_id=? ORDER BY c.created_at DESC")
+        await ensureChallengeSnapshotSchema(env.DB);
+        const rows = await env.DB.prepare("SELECT c.*,p.name AS program_name,p.profit_target_pct,p.daily_drawdown_pct,p.max_drawdown_pct,p.min_trading_days,p.max_trading_days,p.rules_json FROM challenges c JOIN evaluation_programs p ON p.id=c.program_id WHERE c.user_id=? ORDER BY c.created_at DESC")
           .bind(session.user_id).all();
-        return json({ challenges: rows.results });
+        const challenges=(rows.results||[]).map(row=>{const rules=resolveChallengeRules(row,row);return {...row,profit_target_pct:rules.profitTargetPct,daily_drawdown_pct:rules.dailyDrawdownPct,max_drawdown_pct:rules.maxDrawdownPct,min_trading_days:rules.minTradingDays,max_trading_days:rules.maxTradingDays};});
+        return json({ challenges });
       }
 
       if (url.pathname === "/api/admin/challenges/pending-provisioning" && request.method === "GET") {
