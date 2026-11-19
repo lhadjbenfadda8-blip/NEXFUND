@@ -35,7 +35,7 @@ async function ensureChallengeSnapshotSchema(db) {
   if (!names.has("trading_days_count")) await db.prepare("ALTER TABLE challenges ADD COLUMN trading_days_count INTEGER NOT NULL DEFAULT 0 CHECK (trading_days_count >= 0)").run();
   if (!names.has("last_provider_snapshot_at")) await db.prepare("ALTER TABLE challenges ADD COLUMN last_provider_snapshot_at TEXT").run();
   await db.prepare(`CREATE TABLE IF NOT EXISTS provider_snapshot_events (
-    event_id TEXT PRIMARY PRIMARY KEY,
+    event_id TEXT PRIMARY KEY,
     challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
     provider_timestamp TEXT NOT NULL,
     received_at TEXT NOT NULL DEFAULT (datetime('now'))
