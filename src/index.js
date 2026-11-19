@@ -534,7 +534,7 @@ export default {
         const body = await request.json();
         const txid = String(body.txid || "").trim().toLowerCase();
         if (!/^[0-9a-f]{64}$/.test(txid)) return json({ error: "Enter a valid 64-character TRON transaction ID." }, 400);
-        const payment = await env.DB.prepare("SELECT id,challenge_id,amount_usdt,status,txid FROM crypto_payments WHERE id=? AND user_id=?").bind(paymentId, session.user_id).first();
+        const payment = await env.DB.prepare("SELECT id,challenge_id,amount_usdt,status,txid,created_at FROM crypto_payments WHERE id=? AND user_id=?").bind(paymentId, session.user_id).first();
         if (!payment) return json({ error: "Payment request not found." }, 404);
         if (payment.status === "paid") return json({ ok: true, status: "paid", txid: payment.txid, message: "Payment was already confirmed." });
         if (payment.status !== "pending") return json({ error: "This payment request is no longer pending." }, 409);
@@ -542,20 +542,43 @@ export default {
         if (used) return json({ error: "This transaction has already been used." }, 409);
 
         const receivingAddress = getReceivingAddress(env);
-        const apiUrl = "https://api.trongrid.io/v1/accounts/" + encodeURIComponent(receivingAddress) +
-          "/transactions/trc20?only_confirmed=true&limit=200&contract_address=TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
+        // Search confirmed USDT transfers from the payment creation time. TronGrid
+        // caps pages at 200, so follow its fingerprint cursor instead of silently
+        // missing a valid payment when the wallet is busy.
+        const paymentCreatedAt = Date.parse(String(payment.created_at || ""));
+        if (!Number.isFinite(paymentCreatedAt)) return json({ error: "Payment creation time is invalid; contact support." }, 500);
+        const query = new URLSearchParams({
+          only_confirmed: "true",
+          only_to: "true",
+          limit: "200",
+          contract_address: "TR7NHqjeKQxGTci8q8ZY4pL8otSzgjLj6t",
+          min_timestamp: String(Math.max(0, paymentCreatedAt - 5 * 60 * 1000))
+        });
         const headers = {};
         if (env.TRONGRID_API_KEY) headers["TRON-PRO-API-KEY"] = env.TRONGRID_API_KEY;
-        const chainResponse = await fetch(apiUrl, { headers });
-        if (!chainResponse.ok) return json({ error: "Could not verify the transaction with TRON right now. Try again later." }, 502);
-        const chainData = await chainResponse.json();
-        const transfer = (chainData.data || []).find(item =>
-          String(item.transaction_id || "").toLowerCase() === txid &&
-          String(item.to || "").toLowerCase() === receivingAddress.toLowerCase() &&
-          String(item.token_info?.address || "").toLowerCase() === "tr7nhqjekqxgtci8q8zy4p8lotszgjlj6t" &&
-          String(item.type || "").toLowerCase() === "transfer"
-        );
+        let transfer = null;
+        let fingerprint = "";
+        let pages = 0;
+        do {
+          if (fingerprint) query.set("fingerprint", fingerprint);
+          const apiUrl = "https://api.trongrid.io/v1/accounts/" + encodeURIComponent(receivingAddress) +
+            "/transactions/trc20?" + query.toString();
+          const chainResponse = await fetch(apiUrl, { headers });
+          if (!chainResponse.ok) return json({ error: "Could not verify the transaction with TRON right now. Try again later." }, 502);
+          const chainData = await chainResponse.json();
+          transfer = (chainData.data || []).find(item =>
+            String(item.transaction_id || "").toLowerCase() === txid &&
+            String(item.to || "").toLowerCase() === receivingAddress.toLowerCase() &&
+            String(item.token_info?.address || "").toLowerCase() === "tr7nhqjekqxgtci8q8zy4p8lotszgjlj6t" &&
+            String(item.type || "").toLowerCase() === "transfer" &&
+            item.success !== false
+          ) || null;
+          fingerprint = String(chainData.meta?.fingerprint || "");
+          pages += 1;
+        } while (!transfer && fingerprint && pages < 10);
+        if (!transfer && fingerprint) return json({ error: "The wallet has unusually high transfer volume. Automatic verification is temporarily inconclusive; contact support with your TXID." }, 503);
         if (!transfer) return json({ error: "No confirmed incoming USDT TRC20 transfer matching this transaction was found. Check the network, recipient and confirmation status." }, 400);
+        if (Number(transfer.token_info?.decimals) !== 6) return json({ error: "The returned token metadata is not the expected six-decimal USDT contract." }, 502);
         const receivedMicros = BigInt(String(transfer.value || "0"));
         const expectedMicros = BigInt(Math.round(Number(payment.amount_usdt) * 1_000_000));
         if (receivedMicros !== expectedMicros) return json({ error: "The confirmed transfer amount does not match the requested amount." }, 400);
