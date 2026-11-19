@@ -19,6 +19,7 @@ Body:
 ```json
 {
   "event_id": "provider-unique-snapshot-event",
+  "snapshot_at": "2026-11-19T03:20:00.000Z",
   "challenge_id": "challenge-uuid",
   "login": "12345678",
   "balance": 10025.50,
@@ -31,7 +32,7 @@ Body:
 
 The event ID must be unique per provider snapshot. The login is checked against the mapped trading account. Snapshot fields are validated. Only challenges already in `active` status accept snapshots. The endpoint updates balances, equity, high-watermark, daily baseline/date, trading-day count, connection status and last sync time, evaluates daily loss, static maximum loss and profit target/minimum trading days, writes risk events, and notifies the trader when a terminal pass/fail decision occurs.
 
-Repeated event IDs return a duplicate acknowledgement. Terminal challenge states do not accept later snapshots. The endpoint does not accept a trader session as provider authentication.
+Repeated event IDs return a duplicate acknowledgement (reusing an event ID for a different challenge is rejected). Snapshot timestamps must not be in the future beyond a small clock-skew allowance or precede the last accepted snapshot. Terminal challenge states do not accept later snapshots. The endpoint does not accept a trader session as provider authentication.
 
 ## Drawdown basis
 - Daily loss: `daily_start_equity` supplied by the trusted adapter.
