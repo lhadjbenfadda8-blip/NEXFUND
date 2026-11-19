@@ -77,7 +77,13 @@ function renderUsers(){
  const active=adminUsers.filter(u=>u.status==="active").length;
  const suspended=adminUsers.filter(u=>u.status==="suspended").length;
  const summary=$("usersSummary");if(summary)summary.textContent="المجموع: "+adminUsers.length+" · نشط: "+active+" · موقوف: "+suspended+" · نتائج البحث: "+users.length;
- $("usersList").innerHTML=users.length?users.map(u=>'<article class="program-card"><h3>'+esc(u.email)+'</h3><p>Role: <b>'+esc(u.role)+'</b></p><p>الحالة: <b>'+esc(u.status)+'</b></p><p>تاريخ التسجيل: '+esc(u.created_at||"—")+'</p><button class="'+(u.status==="active"?"secondary":"primary")+' user-status" data-id="'+esc(u.id)+'" data-status="'+(u.status==="active"?"suspended":"active")+'">'+(u.status==="active"?"تعليق الحساب":"إعادة تفعيل الحساب")+'</button></article>').join(""):'<p class="empty">لا توجد نتائج مطابقة.</p>';
+ $("usersList").innerHTML=users.length?users.map(u=>'<article class="program-card"><h3>'+esc(u.email)+'</h3><p>Role: <b>'+esc(u.role)+'</b></p><p>الحالة: <b>'+esc(u.status)+'</b></p><p>تاريخ التسجيل: '+esc(u.created_at||"—")+'</p><button class="secondary trader-profile" data-id="'+esc(u.id)+'">عرض الملف الكامل</button> <button class="'+(u.status==="active"?"secondary":"primary")+' user-status" data-id="'+esc(u.id)+'" data-status="'+(u.status==="active"?"suspended":"active")+'">'+(u.status==="active"?"تعليق الحساب":"إعادة تفعيل الحساب")+'</button></article>').join(""):'<p class="empty">لا توجد نتائج مطابقة.</p>';
+ $("usersList").querySelectorAll(".trader-profile").forEach(b=>b.addEventListener("click",async()=>{
+  b.disabled=true;$("usersMessage").textContent="جارٍ تحميل ملف المتداول…";
+  try{await loadTraderProfile(b.dataset.id);$("usersMessage").textContent="تم تحميل ملف المتداول.";}
+  catch(e){$("usersMessage").textContent=e.message;}
+  finally{b.disabled=false;}
+ }));
  $("usersList").querySelectorAll(".user-status").forEach(b=>b.addEventListener("click",async()=>{
   const next=b.dataset.status,verb=next==="suspended"?"تعليق":"إعادة تفعيل";
   if(!confirm("هل تريد "+verb+" هذا الحساب؟"+(next==="suspended"?" سيتم إلغاء جلسات الدخول الحالية.":"")))return;
@@ -91,6 +97,20 @@ async function loadUsers(){
 }
 const usersSearch=$("usersSearch");if(usersSearch)usersSearch.addEventListener("input",renderUsers);
 $("usersRefresh").addEventListener("click",async()=>{ $("usersMessage").textContent="جارٍ تحديث المستخدمين…";try{await loadUsers();$("usersMessage").textContent="تم تحديث قائمة المستخدمين.";}catch(e){$("usersMessage").textContent=e.message;}});
+
+async function loadTraderProfile(userId){
+ const d=await api("/api/admin/users/"+encodeURIComponent(userId));
+ const u=d.user, money2=v=>new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:2}).format(Number(v||0));
+ const section=(title,rows,render)=>'<h3>'+title+'</h3>'+(rows.length?rows.map(render).join(""):'<p class="empty">لا توجد سجلات.</p>');
+ const el=$("traderProfile");el.hidden=false;
+ el.innerHTML='<div class="dash-head"><div><h2>ملف المتداول</h2><p class="sub">'+esc(u.email)+' · '+esc(u.status)+' · '+esc(u.role)+'</p></div><button type="button" class="secondary" id="closeTraderProfile">إغلاق الملف</button></div><div class="program-stats"><span>التحديات<b>'+d.challenges.length+'</b></span><span>الصفقات المسجلة<b>'+d.challenges.reduce((n,c)=>n+Number(c.trade_count||0),0)+'</b></span><span>صافي نتائج الصفقات<b>'+money2(d.challenges.reduce((n,c)=>n+Number(c.net_trade_pnl||0),0))+'</b></span><span>طلبات السحب<b>'+d.payouts.length+'</b></span></div>'+
+ section("التحديات",d.challenges,c=>'<article class="program-card"><h4>'+esc(c.program_name)+' · '+esc(c.status)+'</h4><p>Challenge: <code>'+esc(c.id)+'</code></p><p>الرصيد: '+money2(c.current_balance)+' · Equity: '+money2(c.equity)+'</p><p>حساب MT5: '+esc(c.account_login||"غير مجهز")+' · '+esc(c.server_name||"—")+'</p><p>الصفقات المسجلة: '+esc(c.trade_count)+' · صافي P/L: '+money2(c.net_trade_pnl)+'</p><p>أيام التداول: '+esc(c.trading_days_count)+' · الإنشاء: '+esc(dateFmt(c.created_at))+'</p></article>')+
+ section("طلبات السحب",d.payouts,p=>'<article class="program-card"><p>'+money2(p.requested_amount_usd)+' · '+esc(p.status)+'</p><p>Challenge: '+esc(p.challenge_id)+'</p><p>TX reference: '+esc(p.tx_reference||"—")+'</p><p>'+esc(p.admin_note||"")+' · '+esc(dateFmt(p.created_at))+'</p></article>')+
+ section("المدفوعات",d.payments,p=>'<article class="program-card"><p>'+Number(p.amount_usdt||0).toFixed(2)+' USDT · '+esc(p.status)+'</p><p>TXID: <code>'+esc(p.txid||"—")+'</code></p><p>'+esc(dateFmt(p.created_at))+'</p></article>')+
+ section("سجل المخاطر",d.risk_events,r=>'<article class="program-card"><p>'+esc(r.severity)+' · '+esc(r.event_type)+'</p><p>'+esc(r.message)+'</p><p>Challenge: '+esc(r.challenge_id)+' · '+esc(dateFmt(r.created_at))+'</p></article>');
+ $("closeTraderProfile").addEventListener("click",()=>{el.hidden=true;el.innerHTML="";});
+ el.scrollIntoView({behavior:"smooth",block:"start"});
+}
 async function loadRiskEvents(){
  const severity=$("riskSeverityFilter").value;
  const challengeId=$("riskChallengeFilter").value.trim();
