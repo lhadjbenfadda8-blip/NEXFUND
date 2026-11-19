@@ -78,3 +78,9 @@ button,a,input,select,textarea{transition:background-color .18s,border-color .18
 .readiness-dot.ok{background:#5ad39d;box-shadow:0 0 10px rgba(90,211,157,.35)}
 .readiness-dot.missing{background:#f2b45b;box-shadow:0 0 10px rgba(242,180,91,.25)}
 @media(max-width:560px){.purchase-readiness{padding:14px}.purchase-readiness ul{grid-template-columns:1fr}.purchase-readiness li{font-size:12px}}
+
+.audit-entry{margin:12px 0}
+.audit-entry details{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.audit-entry summary{cursor:pointer;color:var(--accent,#76d8e8);font-size:13px}
+.audit-details{margin:10px 0 0;padding:12px;max-height:260px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;direction:ltr;text-align:left;border:1px solid var(--line);border-radius:9px;background:rgba(3,10,20,.72);color:#c8d6e6;font:12px/1.6 ui-monospace,monospace}
+#auditPageInfo{min-width:110px;text-align:center}
