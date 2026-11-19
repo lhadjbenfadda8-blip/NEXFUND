@@ -447,11 +447,13 @@ export default {
         if (!/^[0-9a-f]{64}$/.test(txid)) return json({ error: "Enter a valid 64-character TRON transaction ID." }, 400);
         const payment = await env.DB.prepare("SELECT id,challenge_id,amount_usdt,status,txid FROM crypto_payments WHERE id=? AND user_id=?").bind(paymentId, session.user_id).first();
         if (!payment) return json({ error: "Payment request not found." }, 404);
-        if (payment.status === "paid") return json({ ok: true, status: "paid", message: "Payment was already confirmed." });
+        if (payment.status === "paid") return json({ ok: true, status: "paid", txid: payment.txid, message: "Payment was already confirmed." });
+        if (payment.status !== "pending") return json({ error: "This payment request is no longer pending." }, 409);
         const used = await env.DB.prepare("SELECT id FROM crypto_payments WHERE txid=? AND status='paid'").bind(txid).first();
         if (used) return json({ error: "This transaction has already been used." }, 409);
 
-        const apiUrl = "https://api.trongrid.io/v1/accounts/" + encodeURIComponent(env.USDT_TRC20_ADDRESS) +
+        const receivingAddress = getReceivingAddress(env);
+        const apiUrl = "https://api.trongrid.io/v1/accounts/" + encodeURIComponent(receivingAddress) +
           "/transactions/trc20?only_confirmed=true&limit=200&contract_address=TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
         const headers = {};
         if (env.TRONGRID_API_KEY) headers["TRON-PRO-API-KEY"] = env.TRONGRID_API_KEY;
@@ -460,7 +462,7 @@ export default {
         const chainData = await chainResponse.json();
         const transfer = (chainData.data || []).find(item =>
           String(item.transaction_id || "").toLowerCase() === txid &&
-          String(item.to || "").toLowerCase() === String(env.USDT_TRC20_ADDRESS).toLowerCase() &&
+          String(item.to || "").toLowerCase() === receivingAddress.toLowerCase() &&
           String(item.token_info?.address || "").toLowerCase() === "tr7nhqjekqxgtci8q8zy4p8lotszgjlj6t" &&
           String(item.type || "").toLowerCase() === "transfer"
         );
