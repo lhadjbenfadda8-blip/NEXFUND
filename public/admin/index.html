@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>إدارة حسابات MT5 | NEXFUND</title>
 <link rel="stylesheet" href="/app/app.css">
-<script src="/admin/admin.js?v=operations-center-02" defer></script>
+<script src="/admin/admin.js?v=audit-ledger-20261119" defer></script>
 </head>
 <body class="admin-body">
 <header class="top"><a class="brand" href="/"><span class="mark">N</span>NEX<span>FUND</span></a><a href="/app/">بوابة المتداول</a> · <a href="/admin/support.html">إدارة الدعم</a> · <a href="/admin/notifications.html">إرسال إشعار</a> · <a href="/admin/payouts.html">إدارة الأرباح</a></header>
@@ -31,6 +31,16 @@
 <p class="message" id="operationsMessage" role="status"></p>
 </section>
 <section class="panel"><h2>ملخص العمليات</h2><div class="program-stats" id="adminKpis"><span>المستخدمون<b id="kpiUsers">—</b></span><span>برامج نشطة<b id="kpiPrograms">—</b></span><span>تحديات نشطة<b id="kpiActive">—</b></span><span>تحديات معلقة<b id="kpiPending">—</b></span><span>ناجحة<b id="kpiPassed">—</b></span><span>فاشلة<b id="kpiFailed">—</b></span><span>طلبات الدفع<b id="kpiOrders">—</b></span><span>دفعات USDT<b id="kpiPayments">—</b></span></div><p class="sub">ملخص مباشر من البيانات المتاحة في لوحة الإدارة، وليس بيانات تقديرية.</p></section>
+<section class="panel" id="auditLogPanel">
+<div class="dash-head"><div><h2>سجل التدقيق الأمني</h2><p class="sub">سجل موحّد للتغييرات الإدارية والعمليات الحساسة. العرض للمشرفين فقط.</p></div><button id="auditRefresh" class="secondary" type="button">تحديث السجل</button></div>
+<div class="program-grid">
+<label>تصفية حسب الإجراء<input id="auditActionFilter" type="search" maxlength="80" placeholder="مثال: payout"></label>
+<label>نوع الهدف<input id="auditTargetFilter" type="search" maxlength="60" placeholder="مثال: payout"></label>
+</div>
+<p id="auditMessage" class="message" role="status">جارٍ تحميل سجل التدقيق…</p>
+<div id="auditLogsList"><p class="empty">جارٍ تحميل السجل…</p></div>
+<div class="dash-head"><button id="auditPrev" class="secondary" type="button" disabled>السابق</button><span id="auditPageInfo" class="sub">—</span><button id="auditNext" class="secondary" type="button" disabled>التالي</button></div>
+</section>
 <section class="panel">
 <h2>إدارة برامج التقييم</h2>
 <p class="sub">تعديل حجم الحساب، السعر، أهداف الربح، حدود الخسارة، أيام التداول وحالة البرنامج.</p>
