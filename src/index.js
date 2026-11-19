@@ -330,6 +330,16 @@ export default {
         return json({ ok:true, user:{id:user.id,email:user.email,status}, message: status === "suspended" ? "User suspended and sessions revoked." : "User reactivated." });
       }
 
+      if (url.pathname === "/api/admin/challenges" && request.method === "GET") {
+        const denied = requireAdmin(session); if (denied) return denied;
+        const status = url.searchParams.get("status");
+        const allowed = ["pending","active","passed","failed","cancelled"];
+        if (status && !allowed.includes(status)) return json({ error: "Invalid challenge status filter." }, 400);
+        const query = "SELECT c.id,c.status,c.initial_balance,c.current_balance,c.equity,c.high_watermark,c.daily_start_equity,c.daily_start_date,c.started_at,c.ended_at,c.failure_reason,c.created_at,u.email,p.name AS program_name,p.profit_target_pct,p.daily_drawdown_pct,p.max_drawdown_pct,p.min_trading_days,p.max_trading_days,t.platform,t.integration_mode,t.connection_status,t.account_login,t.server_name,t.last_sync_at FROM challenges c JOIN users u ON u.id=c.user_id JOIN evaluation_programs p ON p.id=c.program_id LEFT JOIN trading_accounts t ON t.challenge_id=c.id " + (status ? "WHERE c.status=? " : "") + "ORDER BY c.created_at DESC LIMIT 200";
+        const rows = status ? await env.DB.prepare(query).bind(status).all() : await env.DB.prepare(query).all();
+        return json({ challenges: rows.results, limit: 200, filtered_status: status || null });
+      }
+
       if (url.pathname === "/api/admin/financials" && request.method === "GET") {
         const denied = requireAdmin(session); if (denied) return denied;
         await ensureCryptoPayments(env.DB);
