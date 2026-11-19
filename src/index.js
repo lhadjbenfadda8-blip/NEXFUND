@@ -199,6 +199,37 @@ export default {
       if (!session) return json({ error: "Authentication required." }, 401);
 
 
+      // Notifications center API.
+      if (url.pathname === "/api/notifications" && request.method === "GET") {
+        await ensureNotificationTable(env.DB);
+        const limit=Math.min(50,Math.max(1,Number(url.searchParams.get("limit")||20)));
+        const rows=await env.DB.prepare("SELECT id,title,body,created_at,read_at FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT ?").bind(session.user_id,limit).all();
+        const unread=await env.DB.prepare("SELECT COUNT(*) AS count FROM notifications WHERE user_id=? AND read_at IS NULL").bind(session.user_id).first();
+        return json({notifications:rows.results||[],unread_count:Number(unread?.count||0)});
+      }
+      if (url.pathname === "/api/notifications/read-all" && request.method === "POST") {
+        await ensureNotificationTable(env.DB);
+        await env.DB.prepare("UPDATE notifications SET read_at=datetime('now') WHERE user_id=? AND read_at IS NULL").bind(session.user_id).run();
+        return json({ok:true});
+      }
+      if (url.pathname.startsWith("/api/notifications/") && url.pathname.endsWith("/read") && request.method === "PATCH") {
+        await ensureNotificationTable(env.DB);
+        const notificationId=url.pathname.split("/")[3];
+        const result=await env.DB.prepare("UPDATE notifications SET read_at=datetime('now') WHERE id=? AND user_id=? AND read_at IS NULL").bind(notificationId,session.user_id).run();
+        return json({ok:true,updated:result.meta?.changes||0});
+      }
+      if (url.pathname === "/api/admin/notifications/broadcast" && request.method === "POST") {
+        const denied=requireAdmin(session); if(denied) return denied;
+        await ensureNotificationTable(env.DB);
+        const body=await request.json().catch(()=>null); if(!body) return json({error:"Invalid JSON body."},400);
+        const title=String(body.title||"").trim(), message=String(body.body||"").trim();
+        if(title.length<3||title.length>140||message.length<5||message.length>2000) return json({error:"Title must be 3–140 chars and message 5–2000 chars."},400);
+        const users=await env.DB.prepare("SELECT id FROM users").all();
+        const statements=users.results.map(u=>env.DB.prepare("INSERT INTO notifications(id,user_id,title,body) VALUES(?,?,?,?)").bind(id(),u.id,title,message));
+        if(statements.length) await env.DB.batch(statements);
+        return json({ok:true,delivered:statements.length});
+      }
+
       // Support tickets: authenticated trader ticket lifecycle and admin review.
       if (url.pathname === "/api/support/tickets" && request.method === "GET") {
         await ensureSupportTables(env.DB);
@@ -776,6 +807,13 @@ function clearCookie() { return "nexfund_session=; HttpOnly; Secure; SameSite=La
 function corsHeaders(request) {
   const origin = request.headers.get("Origin");
   return origin ? { "Access-Control-Allow-Origin": origin, "Access-Control-Allow-Credentials": "true", "Access-Control-Allow-Methods": "GET,POST,OPTIONS", "Access-Control-Allow-Headers": "Content-Type", "Vary": "Origin" } : {};
+}
+async function ensureNotificationTable(db) {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS notifications (
+    id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,body TEXT NOT NULL,read_at TEXT,created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id,created_at)").run();
 }
 async function ensureSupportTables(db) {
   await db.prepare(`CREATE TABLE IF NOT EXISTS support_tickets (
