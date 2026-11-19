@@ -38,7 +38,10 @@ async function ensureChallengeSnapshotSchema(db) {
   const names = new Set((columns.results || []).map(column => column.name));
   if (!names.has("trading_days_count")) await db.prepare("ALTER TABLE challenges ADD COLUMN trading_days_count INTEGER NOT NULL DEFAULT 0 CHECK (trading_days_count >= 0)").run();
   if (!names.has("last_provider_snapshot_at")) await db.prepare("ALTER TABLE challenges ADD COLUMN last_provider_snapshot_at TEXT").run();
-  if (!names.has("rules_snapshot_json")) await db.prepare("ALTER TABLE challenges ADD COLUMN rules_snapshot_json TEXT NOT NULL DEFAULT '{}'").run();
+  if (!names.has("rules_snapshot_json")) {
+    try { await db.prepare("ALTER TABLE challenges ADD COLUMN rules_snapshot_json TEXT NOT NULL DEFAULT '{}'").run(); }
+    catch (error) { const refreshed=await db.prepare("PRAGMA table_info(challenges)").all(); if (!(refreshed.results||[]).some(column=>column.name==="rules_snapshot_json")) throw error; }
+  }
   await db.prepare(`CREATE TABLE IF NOT EXISTS provider_snapshot_events (
     event_id TEXT PRIMARY KEY,
     challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
