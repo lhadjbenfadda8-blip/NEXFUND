@@ -330,6 +330,16 @@ export default {
         return json({ ok:true, user:{id:user.id,email:user.email,status}, message: status === "suspended" ? "User suspended and sessions revoked." : "User reactivated." });
       }
 
+      if (url.pathname === "/api/admin/financials" && request.method === "GET") {
+        const denied = requireAdmin(session); if (denied) return denied;
+        await ensureCryptoPayments(env.DB);
+        const [orders, payments] = await Promise.all([
+          env.DB.prepare("SELECT o.id,o.status,o.amount_usd,o.currency,o.payment_provider,o.provider_reference,o.created_at,u.email,p.name AS program_name FROM orders o JOIN users u ON u.id=o.user_id JOIN evaluation_programs p ON p.id=o.program_id ORDER BY o.created_at DESC LIMIT 100").all(),
+          env.DB.prepare("SELECT cp.id,cp.status,cp.amount_usdt,cp.txid,cp.created_at,cp.paid_at,u.email,p.name AS program_name,c.status AS challenge_status FROM crypto_payments cp JOIN users u ON u.id=cp.user_id JOIN challenges c ON c.id=cp.challenge_id JOIN evaluation_programs p ON p.id=c.program_id ORDER BY cp.created_at DESC LIMIT 100").all()
+        ]);
+        return json({orders:orders.results,payments:payments.results});
+      }
+
       if (url.pathname === "/api/admin/users" && request.method === "GET") {
         const denied = requireAdmin(session);
         if (denied) return denied;
