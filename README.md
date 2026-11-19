@@ -69,3 +69,7 @@ Email delivery uses Resend. The endpoint is not operational until a compatible
 MT5 provider and a verified sender domain are configured. Do not enable live
 payments or advertise account delivery until the provider contract, account
 creation, email delivery and failure/retry paths have been tested end-to-end.
+
+## Automatic deployment
+
+GitHub Actions includes a Cloudflare Worker deployment workflow for pushes to main and manual runs. Configure repository Actions secrets `CLOUDFLARE_API_TOKEN` (Workers Scripts: Edit permission and access to the correct account) and `CLOUDFLARE_ACCOUNT_ID`. If either secret is absent, the deploy workflow skips with a warning; CI passing does not mean Cloudflare was deployed. After secrets are configured, verify the live `/api/health` endpoint and the deployed commit in Cloudflare.
