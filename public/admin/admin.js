@@ -2,5 +2,44 @@ const $=id=>document.getElementById(id);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money=v=>new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}).format(Number(v));
 async function api(path,options={}){const r=await fetch(path,{credentials:"same-origin",...options,headers:{"Content-Type":"application/json",...(options.headers||{})}});const d=await r.json().catch(()=>({error:"استجابة غير صالحة"}));if(!r.ok)throw new Error(d.error||"فشل الطلب");return d;}
-async function load(){ $("adminMessage").textContent="جارٍ تحميل الطلبات…"; try{const me=await api("/api/auth/me");if(!me.user||me.user.role!=="admin"){location.href="/app/";return;} $("adminEmail").textContent=me.user.email;const data=await api("/api/admin/challenges/pending-provisioning");$("queue").innerHTML=data.challenges.length?data.challenges.map(c=>'<article class="program-card"><h3>'+esc(c.program_name)+'</h3><p>'+esc(c.email)+'</p><p>الرصيد الافتراضي: <b>'+money(c.account_size_usd)+'</b></p><p>المبلغ المؤكد: '+Number(c.amount_usdt).toFixed(2)+' USDT</p><p>الحالة: '+(c.email_status==="failed"?"فشل إرسال البريد — إعادة المحاولة متاحة":"بانتظار إنشاء الحساب")+'</p><button class="primary provision" data-id="'+esc(c.challenge_id)+'">'+(c.email_status==="failed"?"إعادة إرسال بيانات الدخول":"إنشاء حساب MT5 وإرسال البيانات")+'</button><p class="message" id="msg-'+esc(c.challenge_id)+'"></p></article>').join(""):'<p class="empty">لا توجد طلبات مدفوعة تنتظر تجهيز حساب MT5.</p>';$("adminMessage").textContent="تم تحميل قائمة الطلبات.";document.querySelectorAll(".provision").forEach(b=>b.addEventListener("click",async()=>{if(!confirm("سيتم الاتصال بمزود MT5 وإنشاء حساب محاكاة ثم إرسال بيانات الدخول إلى بريد العميل. هل تريد المتابعة؟"))return;b.disabled=true;const msg=$("msg-"+b.dataset.id);msg.textContent="جارٍ تجهيز الحساب وإرسال البريد…";try{const result=await api("/api/admin/challenges/"+encodeURIComponent(b.dataset.id)+"/provision",{method:"POST",body:"{}"});msg.textContent=result.message||"اكتملت العملية.";await load();}catch(e){msg.textContent=e.message;b.disabled=false;}}));}catch(e){$("adminMessage").textContent=e.message;$("queue").innerHTML='<p class="empty">تعذر تحميل لوحة الإدارة. سجّل الدخول بحساب مشرف عبر بوابة المتداول أولاً.</p>';}}
+let adminPrograms=[];
+function fillProgramForm(p){
+ $("programName").value=p.name||"";
+ $("programDescription").value=p.description||"";
+ $("programSize").value=p.account_size_usd;
+ $("programFee").value=p.fee_usd;
+ $("programTarget").value=p.profit_target_pct;
+ $("programDaily").value=p.daily_drawdown_pct;
+ $("programMaxLoss").value=p.max_drawdown_pct;
+ $("programMinDays").value=p.min_trading_days;
+ $("programMaxDays").value=p.max_trading_days??"";
+ $("programStatus").value=p.status;
+}
+async function loadPrograms(){
+ const data=await api("/api/admin/programs");
+ adminPrograms=data.programs||[];
+ $("programSelect").innerHTML=adminPrograms.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+' — '+money(p.account_size_usd)+'</option>').join("");
+ if(adminPrograms.length)fillProgramForm(adminPrograms[0]);
+}
+$("programSelect").addEventListener("change",()=>{
+ const selected=adminPrograms.find(p=>p.id===$("programSelect").value);
+ if(selected)fillProgramForm(selected);
+ $("programEditMessage").textContent="";
+});
+$("saveProgram").addEventListener("click",async()=>{
+ const id=$("programSelect").value;
+ if(!id)return;
+ const p={
+  name:$("programName").value.trim(),description:$("programDescription").value.trim(),
+  account_size_usd:Number($("programSize").value),fee_usd:Number($("programFee").value),
+  profit_target_pct:Number($("programTarget").value),daily_drawdown_pct:Number($("programDaily").value),
+  max_drawdown_pct:Number($("programMaxLoss").value),min_trading_days:Number($("programMinDays").value),
+  max_trading_days:$("programMaxDays").value===""?null:Number($("programMaxDays").value),status:$("programStatus").value
+ };
+ const btn=$("saveProgram");btn.disabled=true;$("programEditMessage").textContent="جارٍ حفظ البرنامج…";
+ try{const result=await api("/api/admin/programs/"+encodeURIComponent(id),{method:"PUT",body:JSON.stringify(p)});$("programEditMessage").textContent=result.message||"تم الحفظ.";await loadPrograms();}
+ catch(e){$("programEditMessage").textContent=e.message;}
+ finally{btn.disabled=false;}
+});
+async function load(){ $("adminMessage").textContent="جارٍ تحميل الطلبات…"; try{const me=await api("/api/auth/me");if(!me.user||me.user.role!=="admin"){location.href="/app/";return;} $("adminEmail").textContent=me.user.email;await loadPrograms();const data=await api("/api/admin/challenges/pending-provisioning");$("queue").innerHTML=data.challenges.length?data.challenges.map(c=>'<article class="program-card"><h3>'+esc(c.program_name)+'</h3><p>'+esc(c.email)+'</p><p>الرصيد الافتراضي: <b>'+money(c.account_size_usd)+'</b></p><p>المبلغ المؤكد: '+Number(c.amount_usdt).toFixed(2)+' USDT</p><p>الحالة: '+(c.email_status==="failed"?"فشل إرسال البريد — إعادة المحاولة متاحة":"بانتظار إنشاء الحساب")+'</p><button class="primary provision" data-id="'+esc(c.challenge_id)+'">'+(c.email_status==="failed"?"إعادة إرسال بيانات الدخول":"إنشاء حساب MT5 وإرسال البيانات")+'</button><p class="message" id="msg-'+esc(c.challenge_id)+'"></p></article>').join(""):'<p class="empty">لا توجد طلبات مدفوعة تنتظر تجهيز حساب MT5.</p>';$("adminMessage").textContent="تم تحميل قائمة الطلبات.";document.querySelectorAll(".provision").forEach(b=>b.addEventListener("click",async()=>{if(!confirm("سيتم الاتصال بمزود MT5 وإنشاء حساب محاكاة ثم إرسال بيانات الدخول إلى بريد العميل. هل تريد المتابعة؟"))return;b.disabled=true;const msg=$("msg-"+b.dataset.id);msg.textContent="جارٍ تجهيز الحساب وإرسال البريد…";try{const result=await api("/api/admin/challenges/"+encodeURIComponent(b.dataset.id)+"/provision",{method:"POST",body:"{}"});msg.textContent=result.message||"اكتملت العملية.";await load();}catch(e){msg.textContent=e.message;b.disabled=false;}}));}catch(e){$("adminMessage").textContent=e.message;$("queue").innerHTML='<p class="empty">تعذر تحميل لوحة الإدارة. سجّل الدخول بحساب مشرف عبر بوابة المتداول أولاً.</p>';}}
 $("refreshBtn").addEventListener("click",load);load();
