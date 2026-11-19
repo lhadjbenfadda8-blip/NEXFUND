@@ -482,7 +482,7 @@ export default {
         if (![size,fee,target,daily,maximum,minDays].every(Number.isFinite) || size < 100 || size > 10000000 || fee < 0 || fee > 100000 || target <= 0 || target > 100 || daily <= 0 || daily > 50 || maximum <= 0 || maximum > 100 || minDays < 0 || minDays > 365 || !Number.isInteger(minDays) || (maxDays !== null && (!Number.isInteger(maxDays) || maxDays < minDays || maxDays > 365))) return json({ error: "Program values are outside allowed ranges." }, 400);
         if (!["draft","active","paused","archived"].includes(status)) return json({ error: "Invalid program status." }, 400);
         await env.DB.batch([
-          env.DB.prepare("UPDATE evaluation_programs SET name=?,description=?,account_size_usd=?,fee_usd=?,profit_target_pct=?,daily_drawdown_pct=?,max_drawdown_pct=?,min_trading_days=?,max_trading_days=?,status=?,rules_json=?,updated_at=datetime('now') WHERE id?")
+          env.DB.prepare("UPDATE evaluation_programs SET name=?,description=?,account_size_usd=?,fee_usd=?,profit_target_pct=?,daily_drawdown_pct=?,max_drawdown_pct=?,min_trading_days=?,max_trading_days=?,status=?,rules_json=?,updated_at=datetime('now') WHERE id=?")
             .bind(name,description,size,fee,target,daily,maximum,minDays,maxDays,status,JSON.stringify(programRules),programId),
           env.DB.prepare("INSERT INTO audit_logs (id,actor_user_id,action,target_type,target_id,details_json) VALUES (?,?,?,'evaluation_program',?,?)")
             .bind(id(),session.user_id,"admin.program_updated",programId,JSON.stringify({name,account_size_usd:size,fee_usd:fee,profit_target_pct:target,daily_drawdown_pct:daily,max_drawdown_pct:maximum,min_trading_days:minDays,max_trading_days:maxDays,trailing_drawdown_pct:trailing,status}))
