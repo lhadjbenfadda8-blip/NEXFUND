@@ -4,7 +4,7 @@ import { evaluateChallenge } from "./risk-engine.js";
 import { checkAuthRateLimit } from "./rate-limit.js";
 import { isValidTronAddress } from "./tron-address.js";
 import { snapshotChallengeRules, resolveChallengeRules } from "./challenge-rules.js";
-import { isPurchaseEnabled } from "./purchase-readiness.js";
+import { isPurchaseEnabled, getPurchaseReadiness } from "./purchase-readiness.js";
 import { remainingPayoutLimit, isAllowedPayoutTransition } from "./payout-rules.js";
 
 const now = () => new Date().toISOString();
@@ -445,7 +445,7 @@ export default {
       if (url.pathname === "/api/programs" && request.method === "GET") {
         await ensureDefaultPrograms(env.DB);
         const rows = await env.DB.prepare("SELECT id,name,description,account_size_usd,fee_usd,profit_target_pct,daily_drawdown_pct,max_drawdown_pct,min_trading_days,max_trading_days FROM evaluation_programs WHERE status='active' ORDER BY account_size_usd ASC").all();
-        return json({ programs: rows.results, pricing_status: "provisional", purchase_enabled: isPurchaseEnabled(env) });
+        return json({ programs: rows.results, pricing_status: "provisional", purchase_enabled: isPurchaseEnabled(env), purchase_readiness: getPurchaseReadiness(env) });
       }
 
       if (url.pathname === "/api/challenges" && request.method === "POST") {
