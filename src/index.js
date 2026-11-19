@@ -551,7 +551,7 @@ export default {
           only_confirmed: "true",
           only_to: "true",
           limit: "200",
-          contract_address: "TR7NHqjeKQxGTci8q8ZY4pL8otSzgjLj6t",
+          contract_address: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
           min_timestamp: String(Math.max(0, paymentCreatedAt - 5 * 60 * 1000))
         });
         const headers = {};
