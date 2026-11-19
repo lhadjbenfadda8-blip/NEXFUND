@@ -4,6 +4,7 @@ import { evaluateChallenge } from "./risk-engine.js";
 import { checkAuthRateLimit } from "./rate-limit.js";
 import { isValidTronAddress } from "./tron-address.js";
 import { snapshotChallengeRules, resolveChallengeRules } from "./challenge-rules.js";
+import { isPurchaseEnabled } from "./purchase-readiness.js";
 import { remainingPayoutLimit, isAllowedPayoutTransition } from "./payout-rules.js";
 
 const now = () => new Date().toISOString();
@@ -69,8 +70,7 @@ async function ensureCryptoPayments(db) {
 
 const DEFAULT_TRC20_RECEIVING_ADDRESS = "TCgnNJivezDYXMPngcffwDGKNt3tFrfN1z";
 const getReceivingAddress = env => env.USDT_TRC20_ADDRESS || DEFAULT_TRC20_RECEIVING_ADDRESS;
-const isProvisioningConfigured = env => { try { return new URL(String(env.MT5_PROVIDER_API_URL||"")).protocol === "https:" && Boolean(env.MT5_PROVIDER_API_KEY && env.RESEND_API_KEY && env.MT5_EMAIL_FROM && env.CREDENTIALS_ENCRYPTION_KEY); } catch { return false; } };
-const isPurchaseEnabled = env => env.PAYMENTS_ENABLED === "true" && isProvisioningConfigured(env);
+
 const id = () => crypto.randomUUID();
 const rateLimited = (result) => json({ error: "Too many attempts. Please wait before trying again." }, 429, { "Retry-After": String(result.retryAfter) });
 
