@@ -28,6 +28,9 @@ export function evaluateChallenge(snapshot, rules) {
   const totalLossPct = Math.max(0, (initial - equity) / initial * 100);
   const profitPct = (equity - initial) / initial * 100;
   const highWatermark = Math.max(priorHighWater, equity);
+  const trailingDrawdownPct = Math.max(0, (highWatermark - equity) / highWatermark * 100);
+  const trailingLimit = rules.trailingDrawdownPct == null ? null : Number(rules.trailingDrawdownPct);
+  if (trailingLimit !== null && (!Number.isFinite(trailingLimit) || trailingLimit <= 0 || trailingLimit > 100)) throw new RangeError("Invalid rule: trailingDrawdownPct");
   const events = [];
   let status = "active";
   let failureReason = null;
@@ -40,6 +43,10 @@ export function evaluateChallenge(snapshot, rules) {
     status = "failed";
     failureReason = "maximum_drawdown";
     events.push({ type: "maximum_drawdown", severity: "breach", value: totalLossPct, threshold: Number(rules.maxDrawdownPct) });
+  } else if (trailingLimit !== null && trailingDrawdownPct >= trailingLimit) {
+    status = "failed";
+    failureReason = "trailing_drawdown";
+    events.push({ type: "trailing_drawdown", severity: "breach", value: trailingDrawdownPct, threshold: trailingLimit });
   } else if (profitPct >= Number(rules.profitTargetPct) && tradingDays >= minTradingDays) {
     status = "passed";
     events.push({ type: "profit_target", severity: "info", value: profitPct, threshold: Number(rules.profitTargetPct) });
@@ -50,7 +57,7 @@ export function evaluateChallenge(snapshot, rules) {
   return {
     status,
     failureReason,
-    metrics: { dailyLossPct, totalLossPct, profitPct, highWatermark, tradingDays, minTradingDays, remainingTradingDays: Math.max(0, minTradingDays - tradingDays) },
+    metrics: { dailyLossPct, totalLossPct, trailingDrawdownPct, profitPct, highWatermark, tradingDays, minTradingDays, remainingTradingDays: Math.max(0, minTradingDays - tradingDays) },
     events
   };
 }
