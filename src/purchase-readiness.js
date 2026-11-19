@@ -1,8 +1,9 @@
 export function isProvisioningConfigured(env = {}) {
   try {
     const endpoint = new URL(String(env.MT5_PROVIDER_API_URL || ""));
-    return endpoint.protocol === "https:"
-      && Boolean(env.MT5_PROVIDER_API_KEY && env.RESEND_API_KEY && env.MT5_EMAIL_FROM && env.CREDENTIALS_ENCRYPTION_KEY);
+    const keyBytes=atob(String(env.CREDENTIALS_ENCRYPTION_KEY||""));
+    return endpoint.protocol === "https:" && keyBytes.length === 32
+      && Boolean(env.MT5_PROVIDER_API_KEY && env.RESEND_API_KEY && env.MT5_EMAIL_FROM);
   } catch {
     return false;
   }
