@@ -268,6 +268,47 @@ export default {
         return json({ ok: true, status: "paid", challenge_status: "pending", message: "Payment confirmed. Your challenge is awaiting account provisioning; it will become active only after the trading account is successfully created." });
       }
 
+      // NEXFUND paper simulator: isolated virtual accounts and trade ledger (no broker or real-money execution).
+      if (url.pathname === "/api/simulator/account" && request.method === "GET") {
+        await ensureSimulatorTables(env.DB);
+        const account = await env.DB.prepare("SELECT id,balance,equity,created_at,updated_at FROM simulator_accounts WHERE user_id=?").bind(session.user_id).first();
+        const trades = await env.DB.prepare("SELECT id,symbol,side,quantity,entry_price,exit_price,pnl,status,created_at,closed_at FROM simulator_trades WHERE user_id=? ORDER BY created_at DESC LIMIT 100").bind(session.user_id).all();
+        return json({ account: account || null, trades: trades.results, mode: "paper", disclaimer: "Simulated trades only. Prices are user-entered and are not live market quotes." });
+      }
+
+      if (url.pathname === "/api/simulator/account" && request.method === "POST") {
+        await ensureSimulatorTables(env.DB);
+        const existing = await env.DB.prepare("SELECT id,balance,equity,created_at,updated_at FROM simulator_accounts WHERE user_id=?").bind(session.user_id).first();
+        if (existing) return json({ account: existing, reused: true, mode: "paper" });
+        const accountId=id();
+        await env.DB.prepare("INSERT INTO simulator_accounts(id,user_id,balance,equity) VALUES(?,?,10000,10000)").bind(accountId,session.user_id).run();
+        const account=await env.DB.prepare("SELECT id,balance,equity,created_at,updated_at FROM simulator_accounts WHERE user_id=?").bind(session.user_id).first();
+        return json({ account, created: true, mode: "paper" },201);
+      }
+
+      if (url.pathname === "/api/simulator/trades" && request.method === "POST") {
+        await ensureSimulatorTables(env.DB);
+        const body=await request.json().catch(()=>null);
+        if (!body) return json({error:"Invalid JSON body."},400);
+        const symbol=String(body.symbol||"").trim().toUpperCase();
+        const side=String(body.side||"").toLowerCase();
+        const quantity=Number(body.quantity), entryPrice=Number(body.entry_price), exitPrice=Number(body.exit_price);
+        if (!/^[A-Z0-9._-]{2,20}$/.test(symbol) || !["buy","sell"].includes(side) || !Number.isFinite(quantity)||quantity<=0||quantity>100000||!Number.isFinite(entryPrice)||entryPrice<=0||!Number.isFinite(exitPrice)||exitPrice<=0)
+          return json({error:"Provide a valid symbol, side, positive quantity and entry/exit prices."},400);
+        const account=await env.DB.prepare("SELECT id,balance,equity FROM simulator_accounts WHERE user_id=?").bind(session.user_id).first();
+        if (!account) return json({error:"Create your paper account first."},404);
+        const pnl=(side==="buy" ? exitPrice-entryPrice : entryPrice-exitPrice)*quantity;
+        const newBalance=Number(account.balance)+pnl;
+        if (!Number.isFinite(newBalance)) return json({error:"Trade calculation failed."},400);
+        const tradeId=id();
+        await env.DB.batch([
+          env.DB.prepare("INSERT INTO simulator_trades(id,user_id,account_id,symbol,side,quantity,entry_price,exit_price,pnl,status,closed_at) VALUES(?,?,?,?,?,?,?,?,?,'closed',datetime('now'))").bind(tradeId,session.user_id,account.id,symbol,side,quantity,entryPrice,exitPrice,pnl),
+          env.DB.prepare("UPDATE simulator_accounts SET balance=?,equity=?,updated_at=datetime('now') WHERE id=? AND user_id=?").bind(newBalance,newBalance,account.id,session.user_id),
+          env.DB.prepare("INSERT INTO audit_logs(id,actor_user_id,action,target_type,target_id,details_json) VALUES(?,?,?,'simulator_trade',?,?)").bind(id(),session.user_id,"simulator.trade_closed",tradeId,JSON.stringify({symbol,side,quantity,entry_price:entryPrice,exit_price:exitPrice,pnl}))
+        ]);
+        return json({ok:true,trade:{id:tradeId,symbol,side,quantity,entry_price:entryPrice,exit_price:exitPrice,pnl},account:{balance:newBalance,equity:newBalance}},201);
+      }
+
       if (url.pathname === "/api/dashboard" && request.method === "GET") {
         const challenges = await env.DB.prepare(
           "SELECT c.id,c.status,c.initial_balance,c.current_balance,c.equity,c.high_watermark,c.daily_start_equity,c.daily_start_date,c.trading_days_count,c.started_at,c.created_at,p.name AS program_name,p.profit_target_pct,p.daily_drawdown_pct,p.max_drawdown_pct,t.platform,t.connection_status,t.account_login,t.server_name FROM challenges c JOIN evaluation_programs p ON p.id=c.program_id LEFT JOIN trading_accounts t ON t.challenge_id=c.id WHERE c.user_id=? ORDER BY c.created_at DESC"
@@ -495,4 +536,19 @@ function clearCookie() { return "nexfund_session=; HttpOnly; Secure; SameSite=La
 function corsHeaders(request) {
   const origin = request.headers.get("Origin");
   return origin ? { "Access-Control-Allow-Origin": origin, "Access-Control-Allow-Credentials": "true", "Access-Control-Allow-Methods": "GET,POST,OPTIONS", "Access-Control-Allow-Headers": "Content-Type", "Vary": "Origin" } : {};
+}
+async function ensureSimulatorTables(db) {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS simulator_accounts (
+    id TEXT PRIMARY KEY, user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    balance REAL NOT NULL DEFAULT 10000, equity REAL NOT NULL DEFAULT 10000,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  await db.prepare(`CREATE TABLE IF NOT EXISTS simulator_trades (
+    id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    account_id TEXT NOT NULL REFERENCES simulator_accounts(id) ON DELETE CASCADE,
+    symbol TEXT NOT NULL, side TEXT NOT NULL CHECK(side IN ('buy','sell')), quantity REAL NOT NULL CHECK(quantity>0),
+    entry_price REAL NOT NULL CHECK(entry_price>0), exit_price REAL NOT NULL CHECK(exit_price>0),
+    pnl REAL NOT NULL, status TEXT NOT NULL DEFAULT 'closed', created_at TEXT NOT NULL DEFAULT (datetime('now')), closed_at TEXT
+  )`).run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_sim_trades_user ON simulator_trades(user_id,created_at)").run();
 }
