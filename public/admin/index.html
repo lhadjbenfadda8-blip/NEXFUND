@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>إدارة حسابات MT5 | NEXFUND</title>
 <link rel="stylesheet" href="/app/app.css?v=audit-20261119">
-<script src="/admin/admin.js?v=audit-ledger-20261119" defer></script>
+<script src="/admin/admin.js?v=system-readiness-20261119" defer></script>
 </head>
 <body class="admin-body">
 <header class="top"><a class="brand" href="/"><span class="mark">N</span>NEX<span>FUND</span></a><a href="/app/">بوابة المتداول</a> · <a href="/admin/support.html">إدارة الدعم</a> · <a href="/admin/notifications.html">إرسال إشعار</a> · <a href="/admin/payouts.html">إدارة الأرباح</a></header>
@@ -40,6 +40,11 @@
 <p id="auditMessage" class="message" role="status">جارٍ تحميل سجل التدقيق…</p>
 <div id="auditLogsList"><p class="empty">جارٍ تحميل السجل…</p></div>
 <div class="dash-head"><button id="auditPrev" class="secondary" type="button" disabled>السابق</button><span id="auditPageInfo" class="sub">—</span><button id="auditNext" class="secondary" type="button" disabled>التالي</button></div>
+</section>
+<section class="panel" id="systemReadinessPanel">
+<div class="dash-head"><div><h2>حالة تكامل المنصة</h2><p class="sub">فحص مباشر لإعدادات الدفع ومزود MT5 والتشفير والبريد. لا يتم عرض أي قيمة سرية.</p></div><button id="systemReadinessRefresh" class="secondary" type="button">إعادة الفحص</button></div>
+<p id="systemReadinessMessage" class="message" role="status">جارٍ فحص إعدادات النظام…</p>
+<div id="systemReadinessList" class="program-grid"><p class="empty">جارٍ الفحص…</p></div>
 </section>
 <section class="panel">
 <h2>إدارة برامج التقييم</h2>
