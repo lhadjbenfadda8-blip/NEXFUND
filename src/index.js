@@ -439,6 +439,14 @@ export default {
         return json({ ok: true, challenge_id: challengeId, payment_id: paymentId, status: "pending", platform, message: "Selection saved. Complete USDT TRC20 payment to activate the evaluation." }, 201);
       }
 
+      if (url.pathname === "/api/payments" && request.method === "GET") {
+        await ensureCryptoPayments(env.DB);
+        const rows = await env.DB.prepare(
+          "SELECT cp.id,cp.challenge_id,cp.amount_usdt,cp.status,cp.txid,cp.created_at,cp.updated_at,cp.paid_at,p.name AS program_name,c.initial_balance AS account_size_usd FROM crypto_payments cp JOIN challenges c ON c.id=cp.challenge_id JOIN evaluation_programs p ON p.id=c.program_id WHERE cp.user_id=? ORDER BY cp.created_at DESC LIMIT 100"
+        ).bind(session.user_id).all();
+        return json({ payments: rows.results || [] });
+      }
+
       if (url.pathname.startsWith("/api/payments/") && request.method === "GET") {
         await ensureCryptoPayments(env.DB);
         const paymentId = url.pathname.split("/")[3];
