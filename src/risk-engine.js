@@ -21,8 +21,10 @@ export function evaluateChallenge(snapshot, rules) {
     }
   }
   const minTradingDays = Math.max(0, Math.floor(Number(rules.minTradingDays ?? 0)));
+  const maxTradingDays = rules.maxTradingDays == null ? null : Math.floor(Number(rules.maxTradingDays));
   const tradingDays = Math.max(0, Math.floor(Number(snapshot.tradingDays ?? 0)));
   if (!Number.isFinite(minTradingDays) || !Number.isFinite(tradingDays)) throw new RangeError("Invalid trading days.");
+  if (maxTradingDays !== null && (!Number.isFinite(maxTradingDays) || maxTradingDays < minTradingDays)) throw new RangeError("Invalid rule: maxTradingDays.");
 
   const dailyLossPct = Math.max(0, (dailyStart - equity) / dailyStart * 100);
   const totalLossPct = Math.max(0, (initial - equity) / initial * 100);
@@ -47,6 +49,10 @@ export function evaluateChallenge(snapshot, rules) {
     status = "failed";
     failureReason = "trailing_drawdown";
     events.push({ type: "trailing_drawdown", severity: "breach", value: trailingDrawdownPct, threshold: trailingLimit });
+  } else if (maxTradingDays !== null && tradingDays > maxTradingDays) {
+    status = "failed";
+    failureReason = "maximum_trading_days";
+    events.push({ type: "maximum_trading_days", severity: "breach", value: tradingDays, threshold: maxTradingDays });
   } else if (profitPct >= Number(rules.profitTargetPct) && tradingDays >= minTradingDays) {
     status = "passed";
     events.push({ type: "profit_target", severity: "info", value: profitPct, threshold: Number(rules.profitTargetPct) });
