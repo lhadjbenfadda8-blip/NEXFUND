@@ -34,6 +34,17 @@ export function evaluateChallenge(snapshot, rules) {
   const trailingLimit = rules.trailingDrawdownPct == null ? null : Number(rules.trailingDrawdownPct);
   if (trailingLimit !== null && (!Number.isFinite(trailingLimit) || trailingLimit <= 0 || trailingLimit > 100)) throw new RangeError("Invalid rule: trailingDrawdownPct");
   const events = [];
+  // Early-warning thresholds are advisory only; hard rule breaches below remain authoritative.
+  const warningRatio = 0.8;
+  if (dailyLossPct >= Number(rules.dailyDrawdownPct) * warningRatio && dailyLossPct < Number(rules.dailyDrawdownPct)) {
+    events.push({ type: "daily_drawdown_warning", severity: "warning", value: dailyLossPct, threshold: Number(rules.dailyDrawdownPct) });
+  }
+  if (totalLossPct >= Number(rules.maxDrawdownPct) * warningRatio && totalLossPct < Number(rules.maxDrawdownPct)) {
+    events.push({ type: "maximum_drawdown_warning", severity: "warning", value: totalLossPct, threshold: Number(rules.maxDrawdownPct) });
+  }
+  if (trailingLimit !== null && trailingDrawdownPct >= trailingLimit * warningRatio && trailingDrawdownPct < trailingLimit) {
+    events.push({ type: "trailing_drawdown_warning", severity: "warning", value: trailingDrawdownPct, threshold: trailingLimit });
+  }
   let status = "active";
   let failureReason = null;
 
