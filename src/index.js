@@ -2,6 +2,7 @@ import { readSession, requireAdmin, requireSameOrigin } from "./auth.js";
 import { json } from "./http.js";
 import { evaluateChallenge } from "./risk-engine.js";
 import { checkAuthRateLimit } from "./rate-limit.js";
+import { isValidTronAddress } from "./tron-address.js";
 
 const now = () => new Date().toISOString();
 const DEFAULT_PROGRAMS = [
@@ -218,15 +219,16 @@ export default {
       // Trader payout requests and admin review.
       if (url.pathname === "/api/payouts" && request.method === "GET") {
         await ensurePayoutTables(env.DB);
-        const rows=await env.DB.prepare("SELECT id,challenge_id,requested_amount_usd,status,admin_note,tx_reference,created_at,updated_at FROM payout_requests WHERE user_id=? ORDER BY created_at DESC LIMIT 50").bind(session.user_id).all();
+        const rows=await env.DB.prepare("SELECT id,challenge_id,requested_amount_usd,payout_wallet_address,status,admin_note,tx_reference,created_at,updated_at FROM payout_requests WHERE user_id=? ORDER BY created_at DESC LIMIT 50").bind(session.user_id).all();
         const eligible=await env.DB.prepare("SELECT id,initial_balance,current_balance,status FROM challenges WHERE user_id=? AND status='passed'").bind(session.user_id).all();
         return json({payouts:rows.results||[],eligible_challenges:(eligible.results||[]).map(c=>({challenge_id:c.id,profit:Math.max(0,Number(c.current_balance)-Number(c.initial_balance)),max_payout_usd:Math.max(0,(Number(c.current_balance)-Number(c.initial_balance))*0.8)}))});
       }
       if (url.pathname === "/api/payouts" && request.method === "POST") {
         await ensurePayoutTables(env.DB);
         const body=await request.json().catch(()=>null);if(!body)return json({error:"Invalid JSON body."},400);
-        const challengeId=String(body.challenge_id||"").trim(), amount=Number(body.amount_usd);
+        const challengeId=String(body.challenge_id||"").trim(), amount=Number(body.amount_usd), wallet=String(body.payout_wallet_address||"").trim();
         if(!challengeId||!Number.isFinite(amount)||amount<=0||amount>1000000)return json({error:"Enter a valid challenge and payout amount."},400);
+        if(!(await isValidTronAddress(wallet)))return json({error:"Enter a valid USDT TRC20 (TRON) payout wallet address."},400);
         const challenge=await env.DB.prepare("SELECT id,initial_balance,current_balance,status FROM challenges WHERE id=? AND user_id=?").bind(challengeId,session.user_id).first();
         if(!challenge||challenge.status!=="passed")return json({error:"Payouts are available only for passed challenges."},403);
         const profit=Math.max(0,Number(challenge.current_balance)-Number(challenge.initial_balance)),maxPayout=profit*0.8;
@@ -234,7 +236,7 @@ export default {
         const pending=await env.DB.prepare("SELECT id FROM payout_requests WHERE challenge_id=? AND status IN ('pending','approved')").bind(challengeId).first();
         if(pending)return json({error:"A payout request for this challenge is already pending or approved."},409);
         const payoutId=id();
-        await env.DB.prepare("INSERT INTO payout_requests(id,user_id,challenge_id,requested_amount_usd,status) VALUES(?,?,?,?,'pending')").bind(payoutId,session.user_id,challengeId,amount).run();
+        await env.DB.prepare("INSERT INTO payout_requests(id,user_id,challenge_id,requested_amount_usd,payout_wallet_address,status) VALUES(?,?,?,?,?,'pending')").bind(payoutId,session.user_id,challengeId,amount,wallet).run();
         await env.DB.prepare("INSERT INTO audit_logs(id,actor_user_id,action,target_type,target_id,details_json) VALUES(?,?,?,'payout_request',?,?)").bind(id(),session.user_id,"payout.requested",payoutId,JSON.stringify({amount_usd:amount,challenge_id:challengeId,max_payout_usd:maxPayout})).run();
         return json({ok:true,payout_id:payoutId,status:"pending",max_payout_usd:maxPayout},201);
       }
@@ -880,10 +882,13 @@ async function ensurePayoutTables(db) {
     id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
     requested_amount_usd REAL NOT NULL CHECK(requested_amount_usd>0),
+    payout_wallet_address TEXT,
     status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected','paid')),
     admin_note TEXT,tx_reference TEXT,reviewed_by TEXT REFERENCES users(id),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`).run();
+  const payoutColumns = await db.prepare("PRAGMA table_info(payout_requests)").all();
+  if (!(payoutColumns.results || []).some(column => column.name === "payout_wallet_address")) await db.prepare("ALTER TABLE payout_requests ADD COLUMN payout_wallet_address TEXT").run();
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_payout_user_created ON payout_requests(user_id,created_at)").run();
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_payout_status_created ON payout_requests(status,created_at)").run();
 }
