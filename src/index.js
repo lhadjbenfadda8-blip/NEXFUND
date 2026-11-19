@@ -533,6 +533,22 @@ export default {
         return json({ challenges: rows.results, limit: 200, filtered_status: status || null });
       }
 
+      if (url.pathname === "/api/admin/risk-events" && request.method === "GET") {
+        const denied = requireAdmin(session); if (denied) return denied;
+        const challengeId = String(url.searchParams.get("challenge_id") || "").trim();
+        const severity = String(url.searchParams.get("severity") || "").trim();
+        const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit") || 100)));
+        if (!Number.isInteger(limit)) return json({ error: "Limit must be an integer." }, 400);
+        if (severity && !["info","warning","breach"].includes(severity)) return json({ error: "Invalid severity filter." }, 400);
+        const filters = [];
+        const bindings = [];
+        if (challengeId) { filters.push("r.challenge_id=?"); bindings.push(challengeId); }
+        if (severity) { filters.push("r.severity=?"); bindings.push(severity); }
+        const where = filters.length ? "WHERE " + filters.join(" AND ") : "";
+        const rows = await env.DB.prepare("SELECT r.id,r.challenge_id,r.event_type,r.severity,r.message,r.metric_value,r.threshold_value,r.created_at,u.email,p.name AS program_name,c.status AS challenge_status FROM risk_events r JOIN challenges c ON c.id=r.challenge_id JOIN users u ON u.id=c.user_id JOIN evaluation_programs p ON p.id=c.program_id " + where + " ORDER BY r.created_at DESC LIMIT ?").bind(...bindings,limit).all();
+        return json({ risk_events: rows.results, limit, filters: { challenge_id: challengeId || null, severity: severity || null } });
+      }
+
       if (url.pathname === "/api/admin/financials" && request.method === "GET") {
         const denied = requireAdmin(session); if (denied) return denied;
         await ensureCryptoPayments(env.DB);
