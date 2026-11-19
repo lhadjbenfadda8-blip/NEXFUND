@@ -27,13 +27,15 @@
 <div id="platformStep" class="platform-step hidden"><h3>2. اختر منصة التداول</h3><div class="platform-choice"><strong>MetaTrader 5 (MT5)</strong><span>متاحة كخيار للربط التجريبي؛ الاتصال الفعلي لم يُفعّل بعد.</span></div><p id="selectedProgramName" class="selected-name"></p><button id="confirmSelection" class="primary" type="button">تأكيد اختيار الحساب والمنصة</button><p id="selectionMessage" class="message" role="status"></p></div>
 <section id="paymentPanel" class="payment-panel hidden">
 <h3>3. الدفع عبر USDT (TRC20)</h3>
-<p>المبلغ المطلوب: <strong id="paymentAmount"></strong></p>
-<p>الشبكة: <strong id="paymentNetwork"></strong></p>
-<p class="wallet-address" id="paymentAddress"></p>
-<label>رقم المعاملة (TXID)<input id="paymentTxid" type="text" dir="ltr" autocomplete="off" placeholder="64-character transaction ID"></label>
+<div class="payment-instruction">حوّل المبلغ المحدد فقط إلى عنوان الاستقبال عبر شبكة TRON (TRC20). لا تستخدم شبكة أخرى.</div>
+<div class="payment-detail"><span>المبلغ المطلوب</span><strong id="paymentAmount"></strong><button id="copyAmountBtn" class="copy-btn" type="button">نسخ المبلغ</button></div>
+<div class="payment-detail"><span>الشبكة</span><strong id="paymentNetwork"></strong></div>
+<div class="payment-detail"><span>عنوان الاستقبال</span><code class="wallet-address" id="paymentAddress"></code><button id="copyAddressBtn" class="copy-btn" type="button">نسخ العنوان</button></div>
+<label>رقم المعاملة (TXID)<input id="paymentTxid" type="text" dir="ltr" autocomplete="off" placeholder="أدخل TXID بعد إرسال التحويل"></label>
 <button id="verifyPaymentBtn" class="primary" type="button">تحقق من التحويل</button>
 <p id="paymentStatus" class="message" role="status"></p>
 <p id="paymentWarning" class="sub"></p>
+<p class="payment-safety">لا ترسل الأموال إذا كان عنوان الاستقبال غير ظاهر أو إذا كانت حالة التحقق غير مفعّلة. تأكيد الدفع يعتمد على بيانات البلوكشين.</p>
 </section>
 <section class="trader-overview" aria-label="ملخص حسابات التداول"><div class="overview-card"><span>إجمالي الحسابات</span><strong id="overviewCount">0</strong></div><div class="overview-card"><span>الحسابات النشطة</span><strong id="overviewActive">0</strong></div><div class="overview-card"><span>إجمالي الرصيد الحالي</span><strong id="overviewBalance">$0</strong></div><div class="overview-card"><span>حالة التقييم</span><strong id="overviewStatus">—</strong></div></section><h3>حساباتك المختارة</h3><div id="challengeList" class="challenge-list empty">لا توجد حسابات تقييم بعد.</div>
 <h3>الإشعارات</h3><div id="notifications" class="empty">لا توجد إشعارات.</div>
