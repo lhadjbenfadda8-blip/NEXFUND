@@ -790,7 +790,7 @@ async function ensureSupportTables(db) {
     author_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
     author_role TEXT NOT NULL CHECK(author_role IN ('trader','admin')),message TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  )`.replace("id TEXT PRIMARY PRIMARY KEY","id TEXT PRIMARY KEY")).run();
+  )`).run();
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_support_tickets_user_updated ON support_tickets(user_id,updated_at)").run();
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_support_messages_ticket_created ON support_ticket_messages(ticket_id,created_at)").run();
 }
