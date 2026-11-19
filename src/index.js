@@ -849,6 +849,24 @@ export default {
         return json({ users: rows.results });
       }
 
+      const adminTraderMatch = url.pathname.match(/^\/api\/admin\/users\/([^/]+)$/);
+      if (adminTraderMatch && request.method === "GET") {
+        const denied = requireAdmin(session);
+        if (denied) return denied;
+        const userId = decodeURIComponent(adminTraderMatch[1]);
+        await ensureCryptoPayments(env.DB);
+        const user = await env.DB.prepare("SELECT id,email,role,status,email_verified_at,created_at,updated_at FROM users WHERE id=?").bind(userId).first();
+        if (!user) return json({ error: "Trader not found." }, 404);
+        const [challenges, payouts, payments, orders, risk] = await Promise.all([
+          env.DB.prepare("SELECT c.id,c.status,c.initial_balance,c.current_balance,c.equity,c.trading_days_count,c.started_at,c.ended_at,c.created_at,p.name AS program_name,t.account_login,t.server_name,t.connection_status,(SELECT COUNT(*) FROM trade_events te WHERE te.challenge_id=c.id) AS trade_count,(SELECT COALESCE(SUM(te.profit+te.commission+te.swap),0) FROM trade_events te WHERE te.challenge_id=c.id) AS net_trade_pnl FROM challenges c JOIN evaluation_programs p ON p.id=c.program_id LEFT JOIN trading_accounts t ON t.challenge_id=c.id WHERE c.user_id=? ORDER BY c.created_at DESC LIMIT 100").bind(userId).all(),
+          env.DB.prepare("SELECT id,challenge_id,requested_amount_usd,status,admin_note,tx_reference,created_at,updated_at FROM payout_requests WHERE user_id=? ORDER BY created_at DESC LIMIT 100").bind(userId).all(),
+          env.DB.prepare("SELECT id,challenge_id,amount_usdt,status,txid,created_at,paid_at FROM crypto_payments WHERE user_id=? ORDER BY created_at DESC LIMIT 100").bind(userId).all(),
+          env.DB.prepare("SELECT o.id,o.status,o.amount_usd,o.currency,o.payment_provider,o.created_at,p.name AS program_name FROM orders o JOIN evaluation_programs p ON p.id=o.program_id WHERE o.user_id=? ORDER BY o.created_at DESC LIMIT 100").bind(userId).all(),
+          env.DB.prepare("SELECT r.id,r.challenge_id,r.event_type,r.severity,r.message,r.metric_value,r.threshold_value,r.created_at FROM risk_events r JOIN challenges c ON c.id=r.challenge_id WHERE c.user_id=? ORDER BY r.created_at DESC LIMIT 50").bind(userId).all()
+        ]);
+        return json({ user, challenges: challenges.results||[], payouts: payouts.results||[], payments: payments.results||[], orders: orders.results||[], risk_events: risk.results||[] });
+      }
+
       return json({ error: "Not found" }, 404);
     } catch (error) {
       console.error("NEXFUND API error", error);
