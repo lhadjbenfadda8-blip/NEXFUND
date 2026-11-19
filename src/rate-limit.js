@@ -25,7 +25,7 @@ export async function checkAuthRateLimit(db, request, route, options = {}) {
       window_start=excluded.window_start,
       attempts=CASE WHEN auth_rate_limits.window_start=excluded.window_start
         THEN auth_rate_limits.attempts+1 ELSE 1 END
-    RETURNING attempts,window_start`).bind(keyHash(keyHash), windowStart).first();
+    RETURNING attempts,window_start`).bind(keyHash, windowStart).first();
 
   // Opportunistic cleanup keeps the table bounded without a separate scheduled job.
   if (windowStart % (24 * 60 * 60) < windowSeconds) {
@@ -37,6 +37,3 @@ export async function checkAuthRateLimit(db, request, route, options = {}) {
   return { allowed, retryAfter, remaining: Math.max(0, limit - Number(row?.attempts ?? 0)) };
 }
 
-function keyHash(value) {
-  return value;
-}
