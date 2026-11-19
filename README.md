@@ -6,13 +6,16 @@ NEXFUND is being developed as a proprietary trading evaluation platform. It is n
 
 - Cloudflare Worker API in `src/`
 - D1 schema in `database/schema.sql`
-- PBKDF2 password hashing (310,000 SHA-256 iterations)
+- PBKDF2 password hashing (100,000 SHA-256 iterations; current implementation)
 - Random opaque session cookies; only SHA-256 token hashes are stored
 - Trader registration, login, logout and session lookup
+- Database-backed per-IP limits on registration/login attempts (IP values are hashed before storage)
+- Payout request flow captures and checksum-validates the trader's TRON (TRC20) destination wallet
 - Trader dashboard and challenge read endpoints
 - Admin overview and user listing (admin role must be granted manually)
 - Deterministic evaluation/risk engine (no live MT5 connection)
 - Payment processing and live MT5 are intentionally disabled
+- Payout requests require a valid TRON Base58Check address; this is address-format validation only, not proof of wallet ownership
 
 ## Cloudflare setup
 
