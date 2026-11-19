@@ -59,6 +59,8 @@ async function ensureCryptoPayments(db) {
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_crypto_payments_status ON crypto_payments(status)").run();
 }
 
+const DEFAULT_TRC20_RECEIVING_ADDRESS = "TCgnNJivezDYXMPngcffwDGKNt3tFrfN1z";
+const getReceivingAddress = env => env.USDT_TRC20_ADDRESS || DEFAULT_TRC20_RECEIVING_ADDRESS;
 const id = () => crypto.randomUUID();
 
 export default {
@@ -240,13 +242,13 @@ export default {
         const paymentId = url.pathname.split("/")[3];
         const payment = await env.DB.prepare("SELECT id,challenge_id,amount_usdt,status,txid,created_at,paid_at FROM crypto_payments WHERE id=? AND user_id=?").bind(paymentId, session.user_id).first();
         if (!payment) return json({ error: "Payment request not found." }, 404);
-        return json({ payment, network: "TRON (TRC20)", token: "USDT", receiving_address: env.USDT_TRC20_ADDRESS || null, configuration_ready: Boolean(env.USDT_TRC20_ADDRESS), payment_enabled: env.PAYMENTS_ENABLED === "true" });
+        return json({ payment, network: "TRON (TRC20)", token: "USDT", receiving_address: getReceivingAddress(env), configuration_ready: Boolean(getReceivingAddress(env)), payment_enabled: env.PAYMENTS_ENABLED === "true" });
       }
 
       if (url.pathname.startsWith("/api/payments/") && url.pathname.endsWith("/verify") && request.method === "POST") {
         await ensureCryptoPayments(env.DB);
         if (env.PAYMENTS_ENABLED !== "true") return json({ error: "Crypto payments are not enabled yet." }, 503);
-        if (!env.USDT_TRC20_ADDRESS) return json({ error: "Receiving address is not configured." }, 503);
+        if (!getReceivingAddress(env)) return json({ error: "Receiving address is not configured." }, 503);
         const paymentId = url.pathname.split("/")[3];
         const body = await request.json();
         const txid = String(body.txid || "").trim().toLowerCase();
