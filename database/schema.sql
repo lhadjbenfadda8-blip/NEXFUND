@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS challenges (
   high_watermark REAL NOT NULL,
   daily_start_equity REAL NOT NULL,
   daily_start_date TEXT NOT NULL,
+  trading_days_count INTEGER NOT NULL DEFAULT 0 CHECK (trading_days_count >= 0),
   started_at TEXT,
   ended_at TEXT,
   failure_reason TEXT,
@@ -68,6 +69,13 @@ CREATE TABLE IF NOT EXISTS challenges (
 );
 CREATE INDEX IF NOT EXISTS idx_challenges_user ON challenges(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_challenges_status ON challenges(status);
+
+CREATE TABLE IF NOT EXISTS provider_snapshot_events (
+  event_id TEXT PRIMARY KEY,
+  challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
+  received_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_provider_snapshot_events_challenge ON provider_snapshot_events(challenge_id, received_at);
 
 CREATE TABLE IF NOT EXISTS trading_accounts (
   id TEXT PRIMARY KEY,
