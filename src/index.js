@@ -29,6 +29,20 @@ async function ensureMT5DeliveryTable(db) {
   )`).run();
   await db.prepare('CREATE INDEX IF NOT EXISTS idx_mt5_delivery_user ON mt5_account_deliveries(user_id,created_at)').run();
 }
+async function ensureChallengeSnapshotSchema(db) {
+  const columns = await db.prepare("PRAGMA table_info(challenges)").all();
+  const names = new Set((columns.results || []).map(column => column.name));
+  if (!names.has("trading_days_count")) await db.prepare("ALTER TABLE challenges ADD COLUMN trading_days_count INTEGER NOT NULL DEFAULT 0 CHECK (trading_days_count >= 0)").run();
+  if (!names.has("last_provider_snapshot_at")) await db.prepare("ALTER TABLE challenges ADD COLUMN last_provider_snapshot_at TEXT").run();
+  await db.prepare(`CREATE TABLE IF NOT EXISTS provider_snapshot_events (
+    event_id TEXT PRIMARY PRIMARY KEY,
+    challenge_id TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
+    provider_timestamp TEXT NOT NULL,
+    received_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_provider_snapshot_events_challenge ON provider_snapshot_events(challenge_id, received_at)").run();
+}
+
 async function ensureCryptoPayments(db) {
   await db.prepare(`CREATE TABLE IF NOT EXISTS crypto_payments (
     id TEXT PRIMARY KEY,
@@ -111,6 +125,7 @@ export default {
 
       // Authenticated machine-to-machine provider snapshot ingestion. Requires migration 0004.
       if (url.pathname === "/api/internal/provider/snapshot" && request.method === "POST") {
+        await ensureChallengeSnapshotSchema(env.DB);
         const configuredSecret = String(env.NEXFUND_PROVIDER_SYNC_SECRET || "");
         const suppliedSecret = String(request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
         if (configuredSecret.length < 32 || suppliedSecret.length !== configuredSecret.length || !constantTimeEqual(suppliedSecret, configuredSecret)) {
@@ -392,6 +407,7 @@ export default {
       }
 
       if (url.pathname === "/api/dashboard" && request.method === "GET") {
+        await ensureChallengeSnapshotSchema(env.DB);
         const challenges = await env.DB.prepare(
           "SELECT c.id,c.status,c.initial_balance,c.current_balance,c.equity,c.high_watermark,c.daily_start_equity,c.daily_start_date,c.trading_days_count,c.started_at,c.ended_at,c.failure_reason,c.last_provider_snapshot_at,c.created_at,p.name AS program_name,p.profit_target_pct,p.daily_drawdown_pct,p.max_drawdown_pct,t.platform,t.connection_status,t.account_login,t.server_name FROM challenges c JOIN evaluation_programs p ON p.id=c.program_id LEFT JOIN trading_accounts t ON t.challenge_id=c.id WHERE c.user_id=? ORDER BY c.created_at DESC"
         ).bind(session.user_id).all();
@@ -542,6 +558,7 @@ export default {
       }
 
       if (url.pathname === "/api/admin/challenges" && request.method === "GET") {
+        await ensureChallengeSnapshotSchema(env.DB);
         const denied = requireAdmin(session); if (denied) return denied;
         const status = url.searchParams.get("status");
         const allowed = ["pending","active","passed","failed","cancelled"];
