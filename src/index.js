@@ -273,7 +273,10 @@ export default {
         await ensureSimulatorTables(env.DB);
         const account = await env.DB.prepare("SELECT id,balance,equity,created_at,updated_at FROM simulator_accounts WHERE user_id=?").bind(session.user_id).first();
         const trades = await env.DB.prepare("SELECT id,symbol,side,quantity,entry_price,exit_price,pnl,status,created_at,closed_at FROM simulator_trades WHERE user_id=? ORDER BY created_at DESC LIMIT 100").bind(session.user_id).all();
-        return json({ account: account || null, trades: trades.results, mode: "paper", disclaimer: "Simulated trades only. Prices are user-entered and are not live market quotes." });
+        const positions = await env.DB.prepare("SELECT id,symbol,side,quantity,entry_price,current_price,stop_loss,take_profit,unrealized_pnl,status,opened_at,closed_at FROM simulator_positions WHERE user_id=? ORDER BY opened_at DESC LIMIT 100").bind(session.user_id).all();
+        const unrealized = positions.results.filter(p=>p.status==="open").reduce((sum,p)=>sum+Number(p.unrealized_pnl||0),0);
+        const accountView=account?{...account,equity:Number(account.balance)+unrealized,unrealized_pnl:unrealized}:null;
+        return json({ account: accountView, positions: positions.results, trades: trades.results, mode: "paper", disclaimer: "Simulated trades only. Prices are user-entered and are not live market quotes." });
       }
 
       if (url.pathname === "/api/simulator/account" && request.method === "POST") {
