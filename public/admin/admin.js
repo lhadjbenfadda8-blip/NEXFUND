@@ -65,10 +65,14 @@ async function loadFinancials(){
  $("paymentsList").innerHTML=payments.length?payments.map(p=>'<article class="program-card"><h3>'+esc(p.program_name)+'</h3><p>'+esc(p.email)+'</p><p>Payment ID: '+esc(p.id)+'</p><p>Amount: <b>'+Number(p.amount_usdt).toFixed(2)+' USDT</b></p><p>Status: <b>'+esc(p.status)+'</b> · Challenge: '+esc(p.challenge_status)+'</p><p>TXID: <code style="overflow-wrap:anywhere">'+esc(p.txid||"—")+'</code></p><p>Created: '+esc(dateFmt(p.created_at))+' · Paid: '+esc(dateFmt(p.paid_at))+'</p></article>').join(""):'<p class="empty">لا توجد دفعات مسجلة.</p>';
 }
 $("financialsRefresh").addEventListener("click",async()=>{$("financialsMessage").textContent="جارٍ تحديث البيانات…";try{await loadFinancials();$("financialsMessage").textContent="تم تحديث البيانات.";}catch(e){$("financialsMessage").textContent=e.message;}});
-async function loadUsers(){
- const data=await api("/api/admin/users");
- const users=data.users||[];updateKpi("kpiUsers",users.length);
- $("usersList").innerHTML=users.length?users.map(u=>'<article class="program-card"><h3>'+esc(u.email)+'</h3><p>Role: <b>'+esc(u.role)+'</b></p><p>الحالة: <b>'+esc(u.status)+'</b></p><p>تاريخ التسجيل: '+esc(u.created_at||"—")+'</p><button class="'+(u.status==="active"?"secondary":"primary")+' user-status" data-id="'+esc(u.id)+'" data-status="'+(u.status==="active"?"suspended":"active")+'">'+(u.status==="active"?"تعليق الحساب":"إعادة تفعيل الحساب")+'</button></article>').join(""):'<p class="empty">لا يوجد مستخدمون.</p>';
+let adminUsers=[];
+function renderUsers(){
+ const query=($("usersSearch")?.value||"").trim().toLowerCase();
+ const users=adminUsers.filter(u=>!query||String(u.email||"").toLowerCase().includes(query)||String(u.role||"").toLowerCase().includes(query)||String(u.status||"").toLowerCase().includes(query));
+ const active=adminUsers.filter(u=>u.status==="active").length;
+ const suspended=adminUsers.filter(u=>u.status==="suspended").length;
+ const summary=$("usersSummary");if(summary)summary.textContent="المجموع: "+adminUsers.length+" · نشط: "+active+" · موقوف: "+suspended+" · نتائج البحث: "+users.length;
+ $("usersList").innerHTML=users.length?users.map(u=>'<article class="program-card"><h3>'+esc(u.email)+'</h3><p>Role: <b>'+esc(u.role)+'</b></p><p>الحالة: <b>'+esc(u.status)+'</b></p><p>تاريخ التسجيل: '+esc(u.created_at||"—")+'</p><button class="'+(u.status==="active"?"secondary":"primary")+' user-status" data-id="'+esc(u.id)+'" data-status="'+(u.status==="active"?"suspended":"active")+'">'+(u.status==="active"?"تعليق الحساب":"إعادة تفعيل الحساب")+'</button></article>').join(""):'<p class="empty">لا توجد نتائج مطابقة.</p>';
  $("usersList").querySelectorAll(".user-status").forEach(b=>b.addEventListener("click",async()=>{
   const next=b.dataset.status,verb=next==="suspended"?"تعليق":"إعادة تفعيل";
   if(!confirm("هل تريد "+verb+" هذا الحساب؟"+(next==="suspended"?" سيتم إلغاء جلسات الدخول الحالية.":"")))return;
@@ -77,6 +81,10 @@ async function loadUsers(){
   catch(e){$("usersMessage").textContent=e.message;b.disabled=false;}
  }));
 }
+async function loadUsers(){
+ const data=await api("/api/admin/users");adminUsers=data.users||[];updateKpi("kpiUsers",adminUsers.length);renderUsers();
+}
+const usersSearch=$("usersSearch");if(usersSearch)usersSearch.addEventListener("input",renderUsers);
 $("usersRefresh").addEventListener("click",async()=>{ $("usersMessage").textContent="جارٍ تحديث المستخدمين…";try{await loadUsers();$("usersMessage").textContent="تم تحديث قائمة المستخدمين.";}catch(e){$("usersMessage").textContent=e.message;}});
 async function loadRiskEvents(){
  const severity=$("riskSeverityFilter").value;
