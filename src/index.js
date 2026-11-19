@@ -118,6 +118,8 @@ export default {
         }
         let body; try { body = await request.json(); } catch { return json({ error: "Invalid JSON body." }, 400); }
         const eventId = String(body.event_id || "");
+        const snapshotAt = String(body.snapshot_at || "");
+        const snapshotMillis = Date.parse(snapshotAt);
         const challengeId = String(body.challenge_id || "");
         const login = String(body.login || "");
         const balance = Number(body.balance);
@@ -125,20 +127,21 @@ export default {
         const dailyStartEquity = Number(body.daily_start_equity);
         const dailyStartDate = String(body.daily_start_date || "");
         const tradingDays = Number(body.trading_days);
-        if (!eventId || eventId.length > 128 || !challengeId || challengeId.length > 128 || !/^[0-9]{4,20}$/.test(login) ||
+        if (!eventId || eventId.length > 128 || !challengeId || challengeId.length > 128 || !Number.isFinite(snapshotMillis) || snapshotMillis > Date.now() + 120000 || !/^[0-9]{4,20}$/.test(login) ||
             !Number.isFinite(balance) || balance < 0 || !Number.isFinite(equity) || equity < 0 ||
             !Number.isFinite(dailyStartEquity) || dailyStartEquity <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(dailyStartDate) ||
             !Number.isInteger(tradingDays) || tradingDays < 0 || tradingDays > 3650) {
           return json({ error: "Snapshot fields are invalid." }, 400);
         }
         const challenge = await env.DB.prepare(
-          "SELECT c.id,c.user_id,c.status,c.initial_balance,c.current_balance,c.equity,c.high_watermark,c.daily_start_equity,c.daily_start_date,c.trading_days_count,p.profit_target_pct,p.daily_drawdown_pct,p.max_drawdown_pct,p.min_trading_days,t.account_login FROM challenges c JOIN evaluation_programs p ON p.id=c.program_id JOIN trading_accounts t ON t.challenge_id=c.id WHERE c.id=?"
+          "SELECT c.id,c.user_id,c.status,c.initial_balance,c.current_balance,c.equity,c.high_watermark,c.daily_start_equity,c.daily_start_date,c.trading_days_count,c.last_provider_snapshot_at,p.profit_target_pct,p.daily_drawdown_pct,p.max_drawdown_pct,p.min_trading_days,t.account_login FROM challenges c JOIN evaluation_programs p ON p.id=c.program_id JOIN trading_accounts t ON t.challenge_id=c.id WHERE c.id=?"
         ).bind(challengeId).first();
         if (!challenge) return json({ error: "Challenge/account mapping not found." }, 404);
         if (challenge.status !== "active") return json({ error: "Only active challenges accept provider snapshots." }, 409);
         if (String(challenge.account_login || "") !== login) return json({ error: "Provider login does not match the mapped account." }, 403);
-        const previousEvent = await env.DB.prepare("SELECT event_id FROM provider_snapshot_events WHERE event_id=?").bind(eventId).first();
-        if (previousEvent) return json({ ok: true, duplicate: true, message: "Snapshot event was already processed." });
+        const previousEvent = await env.DB.prepare("SELECT event_id,challenge_id FROM provider_snapshot_events WHERE event_id=?").bind(eventId).first();
+        if (previousEvent) return previousEvent.challenge_id === challengeId ? json({ ok: true, duplicate: true, message: "Snapshot event was already processed." }) : json({ error: "Provider event ID is already associated with another challenge." }, 409);
+        if (challenge.last_provider_snapshot_at && snapshotAt <= challenge.last_provider_snapshot_at) return json({ error: "Stale provider snapshot rejected." }, 409);
         const evaluation = evaluateChallenge({
           initialBalance: Number(challenge.initial_balance),
           equity,
@@ -154,9 +157,9 @@ export default {
         const nextStatus = evaluation.status;
         const endedAt = nextStatus === "active" ? null : now();
         const statements = [
-          env.DB.prepare("INSERT OR IGNORE INTO provider_snapshot_events (event_id,challenge_id,received_at) VALUES (?,?,datetime('now'))").bind(eventId, challengeId),
-          env.DB.prepare("UPDATE challenges SET current_balance=?,equity=?,high_watermark=?,daily_start_equity=?,daily_start_date=?,trading_days_count=?,status=?,failure_reason=?,ended_at=?,updated_at=datetime('now') WHERE id=? AND status='active' AND EXISTS (SELECT 1 FROM provider_snapshot_events WHERE event_id=?)")
-            .bind(balance,equity,evaluation.metrics.highWatermark,dailyStartEquity,dailyStartDate,tradingDays,nextStatus,evaluation.failureReason,endedAt,challengeId,eventId),
+          env.DB.prepare("INSERT OR IGNORE INTO provider_snapshot_events (event_id,challenge_id,provider_timestamp,received_at) VALUES (?,?,?,datetime('now'))").bind(eventId, challengeId, new Date(snapshotMillis).toISOString()),
+          env.DB.prepare("UPDATE challenges SET current_balance=?,equity=?,high_watermark=?,daily_start_equity=?,daily_start_date=?,trading_days_count=?,last_provider_snapshot_at=?,status=?,failure_reason=?,ended_at=?,updated_at=datetime('now') WHERE id=? AND status='active' AND (last_provider_snapshot_at IS NULL OR last_provider_snapshot_at < ?) AND EXISTS (SELECT 1 FROM provider_snapshot_events WHERE event_id=? AND challenge_id=?)")
+            .bind(balance,equity,evaluation.metrics.highWatermark,dailyStartEquity,dailyStartDate,tradingDays,new Date(snapshotMillis).toISOString(),nextStatus,evaluation.failureReason,endedAt,challengeId,new Date(snapshotMillis).toISOString(),eventId,challengeId),
           env.DB.prepare("UPDATE trading_accounts SET connection_status='connected',last_sync_at=datetime('now') WHERE challenge_id=?").bind(challengeId)
         ];
         for (const event of evaluation.events) {
