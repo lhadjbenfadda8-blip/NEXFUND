@@ -109,6 +109,65 @@ export default {
         return session ? json({ user: { id: session.user_id, email: session.email, role: session.role } }) : json({ user: null }, 401);
       }
 
+      // Authenticated machine-to-machine provider snapshot ingestion. Requires migration 0004.
+      if (url.pathname === "/api/internal/provider/snapshot" && request.method === "POST") {
+        const configuredSecret = String(env.NEXFUND_PROVIDER_SYNC_SECRET || "");
+        const suppliedSecret = String(request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+        if (configuredSecret.length < 32 || suppliedSecret.length !== configuredSecret.length || !constantTimeEqual(suppliedSecret, configuredSecret)) {
+          return json({ error: "Provider authentication failed." }, 401);
+        }
+        let body; try { body = await request.json(); } catch { return json({ error: "Invalid JSON body." }, 400); }
+        const eventId = String(body.event_id || "");
+        const challengeId = String(body.challenge_id || "");
+        const login = String(body.login || "");
+        const balance = Number(body.balance);
+        const equity = Number(body.equity);
+        const dailyStartEquity = Number(body.daily_start_equity);
+        const dailyStartDate = String(body.daily_start_date || "");
+        const tradingDays = Number(body.trading_days);
+        if (!eventId || eventId.length > 128 || !challengeId || challengeId.length > 128 || !/^[0-9]{4,20}$/.test(login) ||
+            !Number.isFinite(balance) || balance < 0 || !Number.isFinite(equity) || equity < 0 ||
+            !Number.isFinite(dailyStartEquity) || dailyStartEquity <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(dailyStartDate) ||
+            !Number.isInteger(tradingDays) || tradingDays < 0 || tradingDays > 3650) {
+          return json({ error: "Snapshot fields are invalid." }, 400);
+        }
+        const challenge = await env.DB.prepare(
+          "SELECT c.id,c.status,c.initial_balance,c.current_balance,c.equity,c.high_watermark,c.daily_start_equity,c.daily_start_date,c.trading_days_count,p.profit_target_pct,p.daily_drawdown_pct,p.max_drawdown_pct,p.min_trading_days,t.account_login FROM challenges c JOIN evaluation_programs p ON p.id=c.program_id JOIN trading_accounts t ON t.challenge_id=c.id WHERE c.id=?"
+        ).bind(challengeId).first();
+        if (!challenge) return json({ error: "Challenge/account mapping not found." }, 404);
+        if (challenge.status !== "active") return json({ error: "Only active challenges accept provider snapshots." }, 409);
+        if (String(challenge.account_login || "") !== login) return json({ error: "Provider login does not match the mapped account." }, 403);
+        const previousEvent = await env.DB.prepare("SELECT event_id FROM provider_snapshot_events WHERE event_id=?").bind(eventId).first();
+        if (previousEvent) return json({ ok: true, duplicate: true, message: "Snapshot event was already processed." });
+        const evaluation = evaluateChallenge({
+          initialBalance: Number(challenge.initial_balance),
+          equity,
+          dailyStartEquity,
+          highWatermark: Number(challenge.high_watermark),
+          tradingDays
+        }, {
+          dailyDrawdownPct: Number(challenge.daily_drawdown_pct),
+          maxDrawdownPct: Number(challenge.max_drawdown_pct),
+          profitTargetPct: Number(challenge.profit_target_pct),
+          minTradingDays: Number(challenge.min_trading_days)
+        });
+        const nextStatus = evaluation.status;
+        const endedAt = nextStatus === "active" ? null : now();
+        const statements = [
+          env.DB.prepare("INSERT OR IGNORE INTO provider_snapshot_events (event_id,challenge_id,received_at) VALUES (?,?,datetime('now'))").bind(eventId, challengeId),
+          env.DB.prepare("UPDATE challenges SET current_balance=?,equity=?,high_watermark=?,daily_start_equity=?,daily_start_date=?,trading_days_count=?,status=?,failure_reason=?,ended_at=?,updated_at=datetime('now') WHERE id=? AND status='active' AND EXISTS (SELECT 1 FROM provider_snapshot_events WHERE event_id=?)")
+            .bind(balance,equity,evaluation.metrics.highWatermark,dailyStartEquity,dailyStartDate,tradingDays,nextStatus,evaluation.failureReason,endedAt,challengeId,eventId),
+          env.DB.prepare("UPDATE trading_accounts SET connection_status='connected',last_sync_at=datetime('now') WHERE challenge_id=?").bind(challengeId)
+        ];
+        for (const event of evaluation.events) {
+          const riskId = eventId + ":" + event.type;
+          statements.push(env.DB.prepare("INSERT OR IGNORE INTO risk_events (id,challenge_id,event_type,severity,message,metric_value,threshold_value) VALUES (?,?,?,?,?,?,?)")
+            .bind(riskId,challengeId,event.type,event.severity,event.type.replaceAll("_"," "),event.value,event.threshold));
+        }
+        await env.DB.batch(statements);
+        return json({ ok:true, status:nextStatus, failure_reason:evaluation.failureReason, metrics:evaluation.metrics, events:evaluation.events });
+      }
+
       const session = await readSession(request, env.DB);
       if (!session) return json({ error: "Authentication required." }, 401);
 
