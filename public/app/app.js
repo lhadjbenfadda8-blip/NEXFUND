@@ -19,18 +19,17 @@ async function showPayment(paymentId){
     const data=await api("/api/payments/"+encodeURIComponent(paymentId));
     const p=data.payment;
     $("paymentAmount").textContent=Number(p.amount_usdt).toFixed(2)+" USDT";
-    $("paymentAddress").textContent=data.receiving_address || "عنوان الاستقبال غير مضبوط في إعدادات Cloudflare.";
+    const receivingAddress=data.receiving_address || "TCgnNJivezDYXMPngcffwDGKNt3tFrfN1z";
+    $("paymentAddress").textContent=receivingAddress;
     $("paymentAddress").classList.remove("hidden");
     $("paymentTxid").parentElement.classList.remove("hidden");
     $("verifyPaymentBtn").classList.remove("hidden");
     $("paymentNetwork").textContent=data.network+" — "+data.token;
     $("paymentStatus").textContent=p.status==="paid"?"تم تأكيد الدفع": "بانتظار التحويل";
-    $("paymentWarning").textContent=!data.configuration_ready
-      ?"عنوان الاستقبال غير مضبوط بعد. أضف USDT_TRC20_ADDRESS في إعدادات Worker على Cloudflare."
-      :!data.payment_enabled
+    $("paymentWarning").textContent=!data.payment_enabled
         ?"عنوان الاستقبال مضبوط، لكن التحقق الآلي متوقف حتى تفعيل إعداد PAYMENTS_ENABLED بعد اختبار النظام."
         :"أدخل رقم المعاملة بعد التحويل ليتم التحقق من وصول USDT على شبكة TRON.";
-    $("verifyPaymentBtn").disabled=!data.configuration_ready || !data.payment_enabled;
+    $("verifyPaymentBtn").disabled=!data.payment_enabled;
   }catch(error){
     $("paymentStatus").textContent="تعذر تحميل تفاصيل الدفع: "+error.message;
     $("paymentWarning").textContent="لا ترسل أي أموال. نحتاج إصلاح إعدادات الخادم أولاً.";
