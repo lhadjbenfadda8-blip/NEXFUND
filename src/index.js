@@ -191,12 +191,20 @@ export default {
         });
         const nextStatus = evaluation.status;
         const endedAt = nextStatus === "active" ? null : now();
-        const statements = [
-          env.DB.prepare("INSERT OR IGNORE INTO provider_snapshot_events (event_id,challenge_id,provider_timestamp,received_at) VALUES (?,?,?,datetime('now'))").bind(eventId, challengeId, new Date(snapshotMillis).toISOString()),
+        const snapshotIso = new Date(snapshotMillis).toISOString();
+        // Claim the event and advance the challenge atomically. A concurrent or stale
+        // event must not be recorded as processed unless its snapshot was applied.
+        const snapshotWrite = await env.DB.batch([
+          env.DB.prepare("INSERT OR IGNORE INTO provider_snapshot_events (event_id,challenge_id,provider_timestamp,received_at) SELECT ?,?,?,datetime('now') WHERE EXISTS (SELECT 1 FROM challenges WHERE id=? AND status='active' AND (last_provider_snapshot_at IS NULL OR last_provider_snapshot_at < ?))")
+            .bind(eventId,challengeId,snapshotIso,challengeId,snapshotIso),
           env.DB.prepare("UPDATE challenges SET current_balance=?,equity=?,high_watermark=?,daily_start_equity=?,daily_start_date=?,trading_days_count=?,last_provider_snapshot_at=?,status=?,failure_reason=?,ended_at=?,updated_at=datetime('now') WHERE id=? AND status='active' AND (last_provider_snapshot_at IS NULL OR last_provider_snapshot_at < ?) AND EXISTS (SELECT 1 FROM provider_snapshot_events WHERE event_id=? AND challenge_id=?)")
-            .bind(balance,equity,evaluation.metrics.highWatermark,dailyStartEquity,dailyStartDate,tradingDays,new Date(snapshotMillis).toISOString(),nextStatus,evaluation.failureReason,endedAt,challengeId,new Date(snapshotMillis).toISOString(),eventId,challengeId),
-          env.DB.prepare("UPDATE trading_accounts SET connection_status='connected',last_sync_at=datetime('now') WHERE challenge_id=?").bind(challengeId)
-        ];
+            .bind(balance,equity,evaluation.metrics.highWatermark,dailyStartEquity,dailyStartDate,tradingDays,snapshotIso,nextStatus,evaluation.failureReason,endedAt,challengeId,snapshotIso,eventId,challengeId)
+        ]);
+        if (Number(snapshotWrite?.[0]?.meta?.changes||0)!==1 || Number(snapshotWrite?.[1]?.meta?.changes||0)!==1) {
+          return json({error:"Snapshot was not applied because a newer or concurrent event already updated this challenge. Retry with a new event ID and a fresh timestamp."},409);
+        }
+        await env.DB.prepare("UPDATE trading_accounts SET connection_status='connected',last_sync_at=datetime('now') WHERE challenge_id=?").bind(challengeId).run();
+        const statements = [];
         for (const event of evaluation.events) {
           const dedupePeriod = event.type.startsWith("daily_") ? dailyStartDate : "lifetime";
           const riskId = "risk:" + challengeId + ":" + event.type + ":" + dedupePeriod;
@@ -210,9 +218,9 @@ export default {
         if (nextStatus === "passed" || nextStatus === "failed") {
           const noticeTitle = nextStatus === "passed" ? "Challenge passed" : "Challenge failed";
           const noticeBody = nextStatus === "passed" ? "Your evaluation has passed the automated rules check." : "Your evaluation failed a risk rule: " + String(evaluation.failureReason || "unknown");
-          statements.push(env.DB.prepare("INSERT INTO notifications (id,user_id,title,body) VALUES (?,?,?,?)").bind(id(),challenge.user_id,noticeTitle,noticeBody));
+          statements.push(env.DB.prepare("INSERT OR IGNORE INTO notifications (id,user_id,title,body) VALUES (?,?,?,?)").bind("challenge:"+challengeId+":"+nextStatus,challenge.user_id,noticeTitle,noticeBody));
         }
-        await env.DB.batch(statements);
+        if(statements.length) await env.DB.batch(statements);
         return json({ ok:true, status:nextStatus, failure_reason:evaluation.failureReason, metrics:evaluation.metrics, events:evaluation.events });
       }
 
