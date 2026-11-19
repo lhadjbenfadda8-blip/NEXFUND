@@ -643,7 +643,7 @@ export default {
         const denied = requireAdmin(session); if (denied) return denied;
         await ensureMT5DeliveryTable(env.DB);
         const rows = await env.DB.prepare(
-          "SELECT c.id AS challenge_id,u.email,p.name AS program_name,p.account_size_usd,cp.amount_usdt,cp.paid_at,c.created_at,td.email_status,t.account_login,t.server_name FROM challenges c JOIN users u ON u.id=c.user_id JOIN evaluation_programs p ON p.id=c.program_id JOIN crypto_payments cp ON cp.challenge_id=c.id LEFT JOIN mt5_account_deliveries td ON td.challenge_id=c.id LEFT JOIN trading_accounts t ON t.challenge_id=c.id WHERE cp.status='paid' AND (td.id IS NULL OR td.email_status='failed') ORDER BY cp.paid_at ASC LIMIT 100"
+          "SELECT c.id AS challenge_id,u.email,p.name AS program_name,c.initial_balance AS account_size_usd,cp.amount_usdt,cp.paid_at,c.created_at,td.email_status,t.account_login,t.server_name FROM challenges c JOIN users u ON u.id=c.user_id JOIN evaluation_programs p ON p.id=c.program_id JOIN crypto_payments cp ON cp.challenge_id=c.id LEFT JOIN mt5_account_deliveries td ON td.challenge_id=c.id LEFT JOIN trading_accounts t ON t.challenge_id=c.id WHERE cp.status='paid' AND (td.id IS NULL OR td.email_status='failed') ORDER BY cp.paid_at ASC LIMIT 100"
         ).all();
         return json({ challenges: rows.results });
       }
@@ -653,7 +653,7 @@ export default {
         const denied = requireAdmin(session); if (denied) return denied;
         await ensureMT5DeliveryTable(env.DB);
         const challengeId = provisionMatch[1];
-        const challenge = await env.DB.prepare("SELECT c.id,c.status,u.id AS user_id,u.email,p.account_size_usd FROM challenges c JOIN users u ON u.id=c.user_id JOIN evaluation_programs p ON p.id=c.program_id JOIN crypto_payments cp ON cp.challenge_id=c.id WHERE c.id=? AND cp.status='paid'").bind(challengeId).first();
+        const challenge = await env.DB.prepare("SELECT c.id,c.status,u.id AS user_id,u.email,c.initial_balance AS account_size_usd FROM challenges c JOIN users u ON u.id=c.user_id JOIN evaluation_programs p ON p.id=c.program_id JOIN crypto_payments cp ON cp.challenge_id=c.id WHERE c.id=? AND cp.status='paid'").bind(challengeId).first();
         if (!challenge) return json({ error: 'Paid challenge not found.' }, 404);
         const oldDelivery = await env.DB.prepare('SELECT * FROM mt5_account_deliveries WHERE challenge_id=?').bind(challengeId).first();
         if (oldDelivery) {
