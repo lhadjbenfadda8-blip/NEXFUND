@@ -1,6 +1,7 @@
 import { readSession, requireAdmin, requireSameOrigin } from "./auth.js";
 import { json } from "./http.js";
 import { evaluateChallenge } from "./risk-engine.js";
+import { checkAuthRateLimit } from "./rate-limit.js";
 
 const now = () => new Date().toISOString();
 const DEFAULT_PROGRAMS = [
@@ -62,6 +63,7 @@ async function ensureCryptoPayments(db) {
 const DEFAULT_TRC20_RECEIVING_ADDRESS = "TCgnNJivezDYXMPngcffwDGKNt3tFrfN1z";
 const getReceivingAddress = env => env.USDT_TRC20_ADDRESS || DEFAULT_TRC20_RECEIVING_ADDRESS;
 const id = () => crypto.randomUUID();
+const rateLimited = (result) => json({ error: "Too many attempts. Please wait before trying again." }, 429, { "Retry-After": String(result.retryAfter) });
 
 export default {
   async fetch(request, env) {
@@ -87,7 +89,9 @@ export default {
       }
 
       if (url.pathname === "/api/auth/register" && request.method === "POST") {
-        const body = await request.json();
+        const limit = await checkAuthRateLimit(env.DB, request, "register", { limit: 5, windowSeconds: 3600 });
+        if (!limit.allowed) return rateLimited(limit);
+        let body; try { body = await request.json(); } catch { return json({ error: "Invalid JSON body." }, 400); }
         const email = String(body.email || "").trim().toLowerCase();
         const password = String(body.password || "");
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return json({ error: "Enter a valid email address." }, 400);
@@ -103,7 +107,9 @@ export default {
       }
 
       if (url.pathname === "/api/auth/login" && request.method === "POST") {
-        const body = await request.json();
+        const limit = await checkAuthRateLimit(env.DB, request, "login", { limit: 8, windowSeconds: 900 });
+        if (!limit.allowed) return rateLimited(limit);
+        let body; try { body = await request.json(); } catch { return json({ error: "Invalid JSON body." }, 400); }
         const email = String(body.email || "").trim().toLowerCase();
         const password = String(body.password || "");
         const user = await env.DB.prepare("SELECT id,email,password_hash,password_salt,role,status FROM users WHERE email = ?").bind(email).first();
