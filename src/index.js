@@ -198,9 +198,14 @@ export default {
           env.DB.prepare("UPDATE trading_accounts SET connection_status='connected',last_sync_at=datetime('now') WHERE challenge_id=?").bind(challengeId)
         ];
         for (const event of evaluation.events) {
-          const riskId = eventId + ":" + event.type;
+          const dedupePeriod = event.type.startsWith("daily_") ? dailyStartDate : "lifetime";
+          const riskId = "risk:" + challengeId + ":" + event.type + ":" + dedupePeriod;
           statements.push(env.DB.prepare("INSERT OR IGNORE INTO risk_events (id,challenge_id,event_type,severity,message,metric_value,threshold_value) VALUES (?,?,?,?,?,?,?)")
             .bind(riskId,challengeId,event.type,event.severity,event.type.replaceAll("_"," "),event.value,event.threshold));
+          if (event.severity === "warning") {
+            statements.push(env.DB.prepare("INSERT OR IGNORE INTO notifications (id,user_id,title,body) VALUES (?,?,?,?)")
+              .bind(riskId + ":notice",challenge.user_id,"تنبيه إدارة المخاطر","اقترب حسابك من حد المخاطرة: " + event.type.replaceAll("_"," ") + ". راجع حدود التحدي قبل مواصلة التداول."));
+          }
         }
         if (nextStatus === "passed" || nextStatus === "failed") {
           const noticeTitle = nextStatus === "passed" ? "Challenge passed" : "Challenge failed";
