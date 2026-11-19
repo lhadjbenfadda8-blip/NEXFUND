@@ -9,16 +9,17 @@ async function sourceFiles(root, extension) {
   const files=[];
   for(const entry of entries) {
     const full=path.join(root,entry.name);
-    if(entry.isDirectory()) files.push(...await htmlFiles(full));
+    if(entry.isDirectory()) files.push(...await sourceFiles(full,extension));
     else if(entry.isFile()&&entry.name.endsWith(extension)) files.push(full);
   }
   return files;
 }
 
-test("frontend inline and external JavaScript parses without syntax errors",async()=>{
-  const files=["index.html",...await sourceFiles("public",".html"),...await sourceFiles("public",".js")];
+test("inline and external frontend JavaScript parses without syntax errors",async()=>{
+  const htmlFiles=["index.html",...await sourceFiles("public",".html")];
+  const jsFiles=await sourceFiles("public",".js");
   let checked=0;
-  for(const file of files) {
+  for(const file of htmlFiles) {
     const html=await readFile(file,"utf8");
     const blocks=[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)];
     for(const block of blocks) {
@@ -28,5 +29,10 @@ test("frontend inline and external JavaScript parses without syntax errors",asyn
       checked++;
     }
   }
-  assert.ok(checked>0,"Expected to check at least one inline script.");
+  for(const file of jsFiles) {
+    const source=await readFile(file,"utf8");
+    assert.doesNotThrow(()=>new vm.Script(source,{filename:file}),file);
+    checked++;
+  }
+  assert.ok(checked>0,"Expected to check frontend scripts.");
 });
