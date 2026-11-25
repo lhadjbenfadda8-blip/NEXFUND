@@ -3,6 +3,7 @@ import { json } from "./http.js";
 import { evaluateChallenge } from "./risk-engine.js";
 import { checkAuthRateLimit } from "./rate-limit.js";
 import { isValidTronAddress } from "./tron-address.js";
+import { isTransferAfterPaymentCreation } from "./payment-verification.js";
 import { snapshotChallengeRules, resolveChallengeRules } from "./challenge-rules.js";
 import { isPurchaseEnabled, getPurchaseReadiness } from "./purchase-readiness.js";
 import { remainingPayoutLimit, isAllowedPayoutTransition } from "./payout-rules.js";
@@ -578,6 +579,12 @@ export default {
         } while (!transfer && fingerprint && pages < 10);
         if (!transfer && fingerprint) return json({ error: "The wallet has unusually high transfer volume. Automatic verification is temporarily inconclusive; contact support with your TXID." }, 503);
         if (!transfer) return json({ error: "No confirmed incoming USDT TRC20 transfer matching this transaction was found. Check the network, recipient and confirmation status." }, 400);
+        // A valid transfer must be created after this payment intent. Without this
+        // timestamp check, an unused historical transfer could be replayed for a
+        // newly-created order if it falls inside the five-minute search overlap.
+        if (!isTransferAfterPaymentCreation(transfer, payment.created_at)) {
+          return json({ error: "This TRON transfer occurred before the payment request was created and cannot be reused. Send a new transfer for this order." }, 400);
+        }
         if (Number(transfer.token_info?.decimals) !== 6) return json({ error: "The returned token metadata is not the expected six-decimal USDT contract." }, 502);
         const receivedMicros = BigInt(String(transfer.value || "0"));
         const expectedMicros = BigInt(Math.round(Number(payment.amount_usdt) * 1_000_000));
